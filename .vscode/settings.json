@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "*.g4": "antlr",
+        "*.luma": "cpp"
+    },
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
+    "C_Cpp.default.intelliSenseMode": "clang-x64",
+    "clangd.path": "/usr/bin/clangd",
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.configureSettings": { "LLVM_DIR": "/usr/lib/llvm-18/cmake" },
+    "antlr4.toolPath": "${workspaceFolder}/external/antlr-4.13.2-complete.jar"
+}
