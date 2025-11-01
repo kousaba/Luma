@@ -4,3 +4,4 @@ dist
 external
 src/generated
 grammar/.antlr
+.vscode

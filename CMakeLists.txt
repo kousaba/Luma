@@ -5,101 +5,85 @@ project(Luma LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# --- 2. ANTLRのコード生成設定 ---
-# ANTLRの実行に必要なJavaと、ANTLRのjarファイルを見つける
+# --- 2. 依存関係のセットアップ ---
+add_subdirectory(external/antlr4-cpp-runtime-4.13.2-source/runtime)
 find_package(Java REQUIRED)
 set(ANTLR4_JAR_EXECUTABLE "${CMAKE_CURRENT_SOURCE_DIR}/external/antlr-4.13.2-complete.jar")
+find_package(LLVM 18.1 REQUIRED CONFIG)
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 
-# ANTLRの文法ファイル
-set(ANTLR_GRAMMAR_FILE ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaParser.g4)
-set(ANTLR_LEXER_GRAMMAR_FILE ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.g4)
-
-# 生成されるファイルのリストを定義
+# --- 3. ANTLRコード生成 ---
 set(ANTLR_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/src/generated)
-set(ANTLR_GENERATED_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.cpp
-    ${ANTLR_GENERATED_DIR}/LumaParser.cpp  # Visitorパターンを使うことを想定
+
+# 3a. Lexerの生成コマンド
+# ====================================================================================
+set(ANTLR_LEXER_GRAMMAR ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.g4)
+set(ANTLR_LEXER_OUTPUTS
+    ${ANTLR_GENERATED_DIR}/LumaLexer.cpp
+    ${ANTLR_GENERATED_DIR}/LumaLexer.h
+    ${ANTLR_GENERATED_DIR}/LumaLexer.interp
+    ${ANTLR_GENERATED_DIR}/LumaLexer.tokens # Parserが依存する重要なファイル
 )
-set(ANTLR_GENERATED_HEADERS
-    ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.h
+
+add_custom_command(
+    OUTPUT ${ANTLR_LEXER_OUTPUTS}
+    COMMAND ${Java_JAVA_EXECUTABLE} -jar ${ANTLR4_JAR_EXECUTABLE}
+            -Dlanguage=Cpp -o ${ANTLR_GENERATED_DIR} -package Luma
+            ${ANTLR_LEXER_GRAMMAR}
+    DEPENDS ${ANTLR_LEXER_GRAMMAR}
+    COMMENT "Generating ANTLR Lexer"
+)
+
+# 3b. Parserの生成コマンド
+# ====================================================================================
+set(ANTLR_PARSER_GRAMMAR ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaParser.g4)
+set(ANTLR_PARSER_OUTPUTS
+    ${ANTLR_GENERATED_DIR}/LumaParser.cpp
     ${ANTLR_GENERATED_DIR}/LumaParser.h
+    ${ANTLR_GENERATED_DIR}/LumaParserVisitor.cpp
+    ${ANTLR_GENERATED_DIR}/LumaParserVisitor.h
 )
 
-file(MAKE_DIRECTORY ${ANTLR_GENERATED_DIR})
-
-# ANTLR Lexerコードを生成するカスタムコマンドを定義
 add_custom_command(
-    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.cpp
-           ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.h
-           ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.interp
-           ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.tokens
+    OUTPUT ${ANTLR_PARSER_OUTPUTS}
     COMMAND ${Java_JAVA_EXECUTABLE} -jar ${ANTLR4_JAR_EXECUTABLE}
-            -Dlanguage=Cpp
-            -o ${CMAKE_CURRENT_SOURCE_DIR}/grammar # Output directory for LumaLexer.g4
-            -visitor
-            -package Luma
-            ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaLexer.g4
-    COMMENT "Generating ANTLR Lexer for Luma"
-    VERBATIM
+            -Dlanguage=Cpp -o ${ANTLR_GENERATED_DIR} -visitor -package Luma
+            ${ANTLR_PARSER_GRAMMAR}
+    DEPENDS ${ANTLR_PARSER_GRAMMAR} ${ANTLR_GENERATED_DIR}/LumaLexer.tokens
+    COMMENT "Generating ANTLR Parser"
 )
 
-# ANTLR Parser/Visitorコードを生成するカスタムコマンドを定義
-add_custom_command(
-    OUTPUT ${ANTLR_GENERATED_DIR}/LumaParser.cpp
-           ${ANTLR_GENERATED_DIR}/LumaParser.h
-           ${ANTLR_GENERATED_DIR}/LumaParser.interp
-           ${ANTLR_GENERATED_DIR}/LumaParser.tokens
-    COMMAND ${Java_JAVA_EXECUTABLE} -jar ${ANTLR4_JAR_EXECUTABLE}
-            -Dlanguage=Cpp
-            -o ${ANTLR_GENERATED_DIR} # Output directory for LumaParser.g4
-            -visitor
-            -package Luma
-            ${CMAKE_CURRENT_SOURCE_DIR}/grammar/LumaParser.g4
-    COMMENT "Generating ANTLR Parser and Visitor for Luma"
-    VERBATIM
+# 3c. 生成される全ソースファイルをまとめる
+set(ANTLR_GENERATED_SOURCES
+    ${ANTLR_LEXER_OUTPUTS}
+    ${ANTLR_PARSER_OUTPUTS}
 )
+add_custom_target(LumaAntlrGenerator DEPENDS ${ANTLR_GENERATED_SOURCES})
 
-
-# LLVMの設定 (llvm-config を使用)
-find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config-18 llvm-config)
-
-if(NOT LLVM_CONFIG_EXECUTABLE)
-    message(FATAL_ERROR "Could not find llvm-config-18 or llvm-config. Please ensure LLVM 18 is installed and in your PATH.")
-endif()
-
-execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir
-                OUTPUT_VARIABLE LLVM_INCLUDE_DIRS
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --libs core irreader support
-                OUTPUT_VARIABLE LLVM_LIBS
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-
-
-
-# 実行ファイルの定義
+# --- 4. メインの実行可能ファイル "Luma" の定義 ---
 add_executable(Luma
     src/main.cpp
     src/parser/AstBuilder.cpp
-    # src/CodeGen.cpp
-    ${ANTLR_GENERATED_SOURCES} # 生成されたソースもコンパイル対象に
+    src/codegen/CodeGen.cpp
+    ${ANTLR_GENERATED_DIR}/LumaLexer.cpp   # 個別に指定
+    ${ANTLR_GENERATED_DIR}/LumaParser.cpp
+    ${ANTLR_GENERATED_DIR}/LumaParserVisitor.cpp
 )
 
+# --- 5. "Luma" ターゲットへの設定適用 ---
+add_dependencies(Luma LumaAntlrGenerator)
 
-
-# Lumaターゲットにのみ設定を適用
 target_include_directories(Luma PRIVATE
     ${LLVM_INCLUDE_DIRS}
-    ${ANTLR_GENERATED_DIR}  # 生成されたヘッダのパス
-    ${CMAKE_CURRENT_SOURCE_DIR}/grammar # LumaLexer.h のパス
-    ${CMAKE_CURRENT_SOURCE_DIR}/src # 自作ヘッダのパス
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/antlr4-cpp-runtime-4.13.2-source/runtime/src # ANTLR C++ runtime include
+    ${ANTLR_GENERATED_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/antlr4-cpp-runtime-4.13.2-source/runtime/src
 )
 
-# target_compile_definitions(Luma PRIVATE ${LLVM_DEFINITIONS}) # LLVM_DEFINITIONS は find_package(LLVM) から来るためコメントアウト
+target_compile_definitions(Luma PRIVATE ${LLVM_DEFINITIONS})
 
-# LLVMライブラリをリンク
-target_link_libraries(Luma PRIVATE ${LLVM_LIBS} antlr4-runtime)
-
-add_subdirectory(external/antlr4-cpp-runtime-4.13.2-source/runtime)
+llvm_map_components_to_libnames(LLVM_LIBS core irreader support)
+target_link_libraries(Luma PRIVATE
+    antlr4-runtime
+    ${LLVM_LIBS}
+)

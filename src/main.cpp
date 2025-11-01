@@ -1,36 +1,79 @@
+#pragma once
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <typeinfo>
 
 // ANTLR
-#include "CommonTokenStream.h"
-#include "LumaParser.h"
-#include "antlr4-runtime.h"
 #include "LumaLexer.h"
 #include "LumaParser.h"
+#include "antlr4-runtime.h"
 
 // LLVM
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/LLVMContext.h"
+
+// AST
+#include "parser/AstBuilder.h"
+#include "ast/Statement.h"
+
+// CodeGen
+#include "codegen/CodeGen.h"
+
+using namespace antlr4;
 
 int main(int argc, char* argv[]){
-    // コマンドライン引数の解析
     if(argc != 2){
-        std::cerr << "Please write the executable file name and source file name.\n";
+        std::cerr << "Usage: ./Luma <source_file>\n";
         return 1;
     }
-    // ソースファイルの読み込み
+    
     std::ifstream file(argv[1]);
     if(!file){
-        std::cerr << "The file could not be opened.\n";
+        std::cerr << "Could not open file: " << argv[1] << "\n";
         return 1;
     }
-    // パース処理
-    antlr4::ANTLRInputStream inputStream(file);
-    // Lexer生成
+    
+    ANTLRInputStream inputStream(file);
     Luma::LumaLexer lexer(&inputStream);
-    // トークンストリームを生成
-    antlr4::CommonTokenStream tokens(&lexer);
-    // Parserを生成
+    CommonTokenStream tokens(&lexer);
     Luma::LumaParser parser(&tokens);
+    
+    tree::ParseTree* tree = parser.program();
+    
+    std::cout << "--- Parse Tree ---\n";
+    std::cout << tree->toStringTree(&parser) << "\n\n";
+
+    // --- AST構築 ---
+    std::cout << "--- AST Construction Trace ---\n";
+    AstBuilder astBuilder;
+    antlrcpp::Any astRootAny = astBuilder.visit(tree); // ここでビジターが動く
+
+    std::cout << "\n--- AST Construction Result ---\n";
+    if(astRootAny.has_value()){
+        try{
+            auto progNode = std::any_cast<std::shared_ptr<ProgramNode>>(astRootAny);
+            // LLVM IR生成
+            std::cout << "\n--- Generated LLVM IR ---\n";
+            CodeGen codeGenerator;
+            codeGenerator.generate(progNode.get()); // コード生成を開始
+            llvm::Module* module = codeGenerator.getModule();
+            if (llvm::verifyModule(*codeGenerator.getModule(), &llvm::errs())) {
+                std::cerr << "LLVM Module Verification Failed!\n";
+            }
+            // 生成されたIRをコンソールに出力
+            std::cout << "\n--- Generated LLVM IR ---\n";
+            if(module){
+                module->print(llvm::errs(), nullptr);
+            }
+        }catch (const std::bad_any_cast& e) {
+            std::cerr << "AST construction failed: returned type is not ProgramNode.\n";
+        }
+    }else{
+        std::cout << "Failed to construct AST (visitor returned empty).\n";
+    }
+    return 0;
 }

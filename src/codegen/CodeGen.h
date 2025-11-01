@@ -1,0 +1,32 @@
+#include <map>
+
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/IRBuilder.h"
+
+#include "ast/AstNode.h"
+#include "ast/Statement.h"
+
+class CodeGen{
+private:
+    // LLVMの全体的な状態を管理するコンテナ
+    std::unique_ptr<llvm::LLVMContext> context;
+    // 一つのソースファイルに対応するトップレベルコンテナ
+    // 関数やグローバル変数など
+    std::unique_ptr<llvm::Module> module;
+    // IRの命令を生成するためのヘルパークラス
+    std::unique_ptr<llvm::IRBuilder<>> builder;
+    // シンボルテーブル(関数名とメモリアドレス(llvm::Value*))を対応付けるmap
+    std::map<std::string, llvm::Value*> namedValues;
+public:
+    CodeGen();
+    // ASTのルートノードを受け取り、コード生成を開始するメインメソッド
+    void generate(ProgramNode* root);
+    // 生成したModuleを外部に渡すメソッド
+    llvm::Module* getModule();
+private:
+    // ASTノードごとのvisitメソッド
+    void visit(ProgramNode* node);
+    void visit(StatementNode* node);
+    llvm::Value* visit(VarDeclNode* node);
+};

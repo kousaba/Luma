@@ -4,6 +4,12 @@ options{
     tokenVocab = LumaLexer;
 }
 
-tmp
-    : TMP
+program: statement* EOF;
+
+statement
+    : varDecl
+    ;
+
+varDecl
+    : VAR IDENTIFIER SEMI
     ;

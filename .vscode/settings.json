@@ -1,7 +1,7 @@
 {
     "files.associations": {
         "*.g4": "antlr",
-        "*.luma": "cpp"
+        "*.luma": "luma"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/g++",
     "C_Cpp.default.intelliSenseMode": "clang-x64",
