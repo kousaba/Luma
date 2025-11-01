@@ -76,7 +76,7 @@ add_dependencies(Luma LumaAntlrGenerator)
 target_include_directories(Luma PRIVATE
     ${LLVM_INCLUDE_DIRS}
     ${ANTLR_GENERATED_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/generated
     ${CMAKE_CURRENT_SOURCE_DIR}/external/antlr4-cpp-runtime-4.13.2-source/runtime/src
 )
 

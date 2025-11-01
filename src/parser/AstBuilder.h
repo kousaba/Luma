@@ -1,15 +1,20 @@
 #pragma once
-#include "ast/AstNode.h" // 作成したASTノードのヘッダ
+#include "LumaParser.h"
+#include "../ast/AstNode.h" // 作成したASTノードのヘッダ
 #include "LumaParserVisitor.h"
 
 class AstBuilder : public Luma::LumaParserVisitor {
 public:
-    // programルールに対応するvisitメソッド
+    // program
     antlrcpp::Any visitProgram(Luma::LumaParser::ProgramContext *ctx) override;
-
-    // statementルールに対応するvisitメソッド
+    // statement
     antlrcpp::Any visitStatement(Luma::LumaParser::StatementContext *ctx) override;
-
-    // variableDeclarationルールに対応するvisitメソッド
+    // varDecl
     antlrcpp::Any visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) override;
+    
+    // expr
+    antlrcpp::Any visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx) override;
+    antlrcpp::Any visitAdditiveExpr(Luma::LumaParser::AdditiveExprContext *ctx) override;
+    antlrcpp::Any visitMultiplicativeExpr(Luma::LumaParser::MultiplicativeExprContext *ctx) override;
+    antlrcpp::Any visitExpr(Luma::LumaParser::ExprContext *ctx) override;
 };

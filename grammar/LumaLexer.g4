@@ -5,10 +5,20 @@ options{
 
 // キーワード
 VAR: 'var';
+LET: 'let';
+// operator
+EQ: '=';
+ADD: '+';
+SUB: '-';
+MUL: '*';
+DIV: '/';
 // 記号
 SEMI: ';';
+LPAREN: '(';
+RPAREN: ')';
 // リテラル
-IDENTIFIER: [a-zA-Z0-9]+;
+INTEGER: [0-9]+;
+IDENTIFIER: [a-zA-Z][a-zA-Z0-9]*;
 
 // WS
-WS: [ \t] -> skip;
+WS: [ \t\n\r] -> skip;

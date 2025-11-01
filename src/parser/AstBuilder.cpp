@@ -1,10 +1,15 @@
-#include "parser/AstBuilder.h"
-#include "ast/Statement.h"
+#pragma once
+#include "AstBuilder.h"
+#include "LumaLexer.h"
+#include "LumaParser.h"
+#include "LumaParserVisitor.h"
+#include "Token.h"
+#include "../ast/Expression.h"
+#include "../ast/Statement.h"
+#include <cstddef>
 #include <iostream> // デバッグ用
 
 antlrcpp::Any AstBuilder::visitProgram(Luma::LumaParser::ProgramContext *ctx) {
-    std::cout << "[ENTER] visitProgram\n";
-    
     auto progNode = std::make_shared<ProgramNode>();
 
     for (auto stmtCtx : ctx->statement()) {
@@ -13,31 +18,97 @@ antlrcpp::Any AstBuilder::visitProgram(Luma::LumaParser::ProgramContext *ctx) {
             progNode->statements.push_back(std::any_cast<std::shared_ptr<StatementNode>>(result));
         }
     }
-    
-    // ★★★ 戻り値の型をコンソールに出力 ★★★
+
     antlrcpp::Any finalResult = progNode;
-    std::cout << "[EXIT]  visitProgram, returning type: " << finalResult.type().name() << "\n";
     return finalResult;
 }
 
 antlrcpp::Any AstBuilder::visitStatement(Luma::LumaParser::StatementContext *ctx) {
-    std::cout << "[ENTER] visitStatement\n";
-    
     antlrcpp::Any result = visitChildren(ctx); // 子を訪問
-
-    // ★★★ 戻り値の型をコンソールに出力 ★★★
-    std::cout << "[EXIT]  visitStatement, returning type: " << (result.has_value() ? result.type().name() : "empty") << "\n";
     return result;
 }
 
 antlrcpp::Any AstBuilder::visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) {
-    std::cout << "[ENTER] visitVarDecl\n";
-
     std::string varName = ctx->IDENTIFIER()->getText();
-    auto node = std::make_shared<VarDeclNode>(varName);
-    
-    // ★★★ 戻り値の型をコンソールに出力 ★★★
+    std::shared_ptr<ExprNode> init = nullptr;
+    if(ctx->expr()){
+        antlrcpp::Any initAny = visit(ctx->expr());
+        init = std::any_cast<std::shared_ptr<ExprNode>>(initAny);
+    }
+    auto node = std::make_shared<VarDeclNode>(varName, init);
     antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
-    std::cout << "[EXIT]  visitVarDecl, returning type: " << result.type().name() << "\n";
     return result;
+}
+
+antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx){
+    if(ctx->INTEGER()){
+        int val = std::stoi(ctx->INTEGER()->getText());
+        auto node = std::make_shared<NumberLiteralNode>(val);
+        antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
+        return result;
+    }else if(ctx->expr()){
+        return visit(ctx->expr());
+    }else{
+        std::cerr << "Error: Unknown primary expr.\n";
+        return nullptr;
+    }
+}
+
+antlrcpp::Any AstBuilder::visitAdditiveExpr(Luma::LumaParser::AdditiveExprContext *ctx){
+    // 1. 最初の左辺を取得
+    antlrcpp::Any lhs_any = visit(ctx->multiplicativeExpr(0));
+
+    // 2. 演算子の数だけループ (ctx->opはTokenのリストになる)
+    for (size_t i = 0; i < ctx->op.size(); ++i) {
+        // 3. 演算子のテキストを取得
+        std::string op_text = ctx->op[i]->getText();
+
+        // 4. 対応する右辺を取得
+        antlrcpp::Any rhs_any = visit(ctx->multiplicativeExpr(i + 1));
+
+        // キャスト
+        auto lhs_expr = std::any_cast<std::shared_ptr<ExprNode>>(lhs_any);
+        auto rhs_expr = std::any_cast<std::shared_ptr<ExprNode>>(rhs_any);
+
+        // 新しい左辺を構築
+        auto new_lhs_expr = std::make_shared<BinaryOpNode>(op_text, lhs_expr, rhs_expr);
+        
+        // 次のループのために更新
+        lhs_any = std::shared_ptr<ExprNode>(new_lhs_expr);
+    }
+
+    // 最終的な結果を返す
+    return lhs_any;
+}
+
+antlrcpp::Any AstBuilder::visitMultiplicativeExpr(Luma::LumaParser::MultiplicativeExprContext *ctx) {
+    // 1. 最初の左辺を取得
+    antlrcpp::Any lhs_any = visit(ctx->primaryExpr(0));
+
+    // 2. 演算子の数だけループ (ctx->opはTokenのリストになる)
+    for (size_t i = 0; i < ctx->op.size(); ++i) {
+        // 3. 演算子のテキストを取得
+        std::string op_text = ctx->op[i]->getText();
+
+        // 4. 対応する右辺を取得
+        antlrcpp::Any rhs_any = visit(ctx->primaryExpr(i + 1));
+
+        // キャスト
+        auto lhs_expr = std::any_cast<std::shared_ptr<ExprNode>>(lhs_any);
+        auto rhs_expr = std::any_cast<std::shared_ptr<ExprNode>>(rhs_any);
+
+        // 新しい左辺を構築
+        auto new_lhs_expr = std::make_shared<BinaryOpNode>(op_text, lhs_expr, rhs_expr);
+        
+        // 次のループのために更新
+        lhs_any = std::shared_ptr<ExprNode>(new_lhs_expr);
+    }
+
+    // 最終的な結果を返す
+    return lhs_any;
+}
+
+
+antlrcpp::Any AstBuilder::visitExpr(Luma::LumaParser::ExprContext *ctx){
+    return visit(ctx->additiveExpr());
 }

@@ -1,1 +1,2 @@
-var aaa;
+var aaa = 10 * 5 / 2 * 5;
+var bbb = 5 + 2;

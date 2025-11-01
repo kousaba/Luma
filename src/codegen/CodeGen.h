@@ -4,8 +4,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
 
-#include "ast/AstNode.h"
-#include "ast/Statement.h"
+#include "../ast/AstNode.h"
+#include "../ast/Statement.h"
 
 class CodeGen{
 private:
@@ -21,12 +21,15 @@ private:
 public:
     CodeGen();
     // ASTのルートノードを受け取り、コード生成を開始するメインメソッド
-    void generate(ProgramNode* root);
+    void generate(ProgramNode *root);
     // 生成したModuleを外部に渡すメソッド
     llvm::Module* getModule();
 private:
     // ASTノードごとのvisitメソッド
-    void visit(ProgramNode* node);
-    void visit(StatementNode* node);
-    llvm::Value* visit(VarDeclNode* node);
+    void visit(ProgramNode *node);
+    void visit(StatementNode *node);
+    llvm::Value* visit(VarDeclNode *node);
+    llvm::Value* visit(ExprNode *node);
+    llvm::Value* visit(NumberLiteralNode *node);
+    llvm::Value* visit(BinaryOpNode *node);
 };

@@ -1,6 +1,7 @@
 #include <iostream>
 #include "CodeGen.h"
-#include "ast/Statement.h"
+#include "../ast/Expression.h"
+#include "../ast/Statement.h"
 #include <llvm/IR/IRBuilder.h>
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/Function.h"
@@ -50,11 +51,54 @@ void CodeGen::visit(StatementNode* node){
     }
 }
 
+// Expr
+llvm::Value* CodeGen::visit(ExprNode *node){
+    // dynamic_castでどれにキャストできるか分ける
+    if(auto cnode = dynamic_cast<NumberLiteralNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<BinaryOpNode*>(node)) return visit(cnode);
+    std::cerr << "Error: ExprNode couldn't cast.\n";
+    return nullptr;
+}
+
 // varDecl 変数宣言
 llvm::Value* CodeGen::visit(VarDeclNode* node){
     std::string varName = node->varName; // 変数名
     auto type = builder->getInt32Ty(); // 型 TODO: 複数型対応
     auto allocaInst = builder->CreateAlloca(type, nullptr, varName); // メモリ確保
     namedValues[node->varName] = allocaInst;
+    if(node->initializer){
+        llvm::Value* initVal = visit(node->initializer.get());
+        builder->CreateStore(initVal, allocaInst);
+    }
     return 0;
+}
+
+// NumberLiteral 数値リテラル
+llvm::Value* CodeGen::visit(NumberLiteralNode *node){
+    // int32tyを返す
+    return builder->getInt32(node->value);
+}
+
+// BinaryOp 二項計算
+llvm::Value* CodeGen::visit(BinaryOpNode *node){
+    // 右辺と左辺を再帰的にvisit
+    llvm::Value* lval = visit(node->left.get());
+    llvm::Value* rval = visit(node->right.get());
+    if (!lval || !rval) {
+        std::cerr << "Error: One of the operands in a binary operation is null.\n";
+        return nullptr; 
+    }
+    // opを確認
+    if(node->op == "+"){
+        return builder->CreateAdd(lval, rval, "addtmp");
+    }else if(node->op == "-"){
+        return builder->CreateSub(lval, rval, "subtmp");
+    }else if(node->op == "*"){
+        return builder->CreateMul(lval, rval, "multmp");
+    }else if(node->op == "/"){
+        return builder->CreateSDiv(lval, rval, "divtmp");
+    }else{
+        std::cerr << "Error: Unknown operator.\n";
+        return nullptr;
+    }
 }

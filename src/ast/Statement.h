@@ -1,5 +1,6 @@
 #pragma once
 #include "AstNode.h"
+#include "../ast/Expression.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -12,7 +13,9 @@ class StatementNode : public AstNode {};
 class VarDeclNode : public StatementNode{
 public:
     std::string varName;
-    VarDeclNode(const std::string& name) : varName(name){}
+    // 初期化式を保持するポインタ(式がない場合はnullptr)
+    std::shared_ptr<ExprNode> initializer;
+    VarDeclNode(const std::string& name, std::shared_ptr<ExprNode> init = nullptr) : varName(name), initializer(init){}
 };
 
 // プログラム全体を表すノード（文のリストを持つ）

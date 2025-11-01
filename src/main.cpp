@@ -1,13 +1,10 @@
-#pragma once
 #include <iostream>
 #include <fstream>
 #include <memory>
-#include <typeinfo>
 
 // ANTLR
 #include "LumaLexer.h"
 #include "LumaParser.h"
-#include "antlr4-runtime.h"
 
 // LLVM
 #include "llvm/IR/LLVMContext.h"
