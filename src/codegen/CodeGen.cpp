@@ -118,7 +118,21 @@ llvm::Value* CodeGen::visit(BinaryOpNode *node){
         return builder->CreateMul(lval, rval, "multmp");
     }else if(node->op == "/"){
         return builder->CreateSDiv(lval, rval, "divtmp");
-    }else{
+    }else if(node->op == "=="){
+        return builder->CreateICmpEQ(lval, rval, "eqtmp");
+    }else if(node->op == "!="){
+        return builder->CreateICmpNE(lval, rval, "neqtmp");
+    }else if(node->op == "<"){
+        return builder->CreateICmpSLT(lval, rval, "lttmp");
+    }else if(node->op == ">"){
+        return builder->CreateICmpSGT(lval, rval, "gttmp");
+    }else if(node->op == "<="){
+        return builder->CreateICmpSLE(lval, rval, "letmp");
+    }else if(node->op == ">="){
+        return builder->CreateICmpSGE(lval, rval, "getmp");
+    }
+
+    else{
         std::cerr << "Error: Unknown operator.\n";
         return nullptr;
     }

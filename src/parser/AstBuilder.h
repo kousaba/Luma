@@ -18,5 +18,6 @@ public:
     antlrcpp::Any visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx) override;
     antlrcpp::Any visitAdditiveExpr(Luma::LumaParser::AdditiveExprContext *ctx) override;
     antlrcpp::Any visitMultiplicativeExpr(Luma::LumaParser::MultiplicativeExprContext *ctx) override;
+    antlrcpp::Any visitComparisonExpr(Luma::LumaParser::ComparisonExprContext *ctx) override;
     antlrcpp::Any visitExpr(Luma::LumaParser::ExprContext *ctx) override;
 };

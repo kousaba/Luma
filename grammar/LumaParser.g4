@@ -33,7 +33,10 @@ multiplicativeExpr
 additiveExpr
     : multiplicativeExpr ( op+=( ADD | SUB ) multiplicativeExpr )*
     ;
+comparisonExpr
+    : additiveExpr(op=(EQEQ | NE | LT | GT | LE | GE) additiveExpr)? // 比較は一回だけとする
+    ;
 // expressionルールのトップレベル
 expr
-    : additiveExpr
+    : comparisonExpr
     ;

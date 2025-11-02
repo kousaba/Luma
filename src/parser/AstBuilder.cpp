@@ -122,7 +122,22 @@ antlrcpp::Any AstBuilder::visitMultiplicativeExpr(Luma::LumaParser::Multiplicati
     return lhs_any;
 }
 
+antlrcpp::Any AstBuilder::visitComparisonExpr(Luma::LumaParser::ComparisonExprContext *ctx){
+    antlrcpp::Any lhs_any = visit(ctx->additiveExpr(0));
+    if(ctx->op){
+        std::string op_text = ctx->op->getText();
+        antlrcpp::Any rhs_any = visit(ctx->additiveExpr(1));
+
+        auto lhs_expr = std::any_cast<std::shared_ptr<ExprNode>>(lhs_any);
+        auto rhs_expr = std::any_cast<std::shared_ptr<ExprNode>>(rhs_any);
+
+        auto new_expr = std::make_shared<BinaryOpNode>(op_text, lhs_expr, rhs_expr);
+        antlrcpp::Any result = std::shared_ptr<ExprNode>(new_expr);
+        return result;
+    }
+    return lhs_any;
+}
 
 antlrcpp::Any AstBuilder::visitExpr(Luma::LumaParser::ExprContext *ctx){
-    return visit(ctx->additiveExpr());
+    return visit(ctx->comparisonExpr());
 }
