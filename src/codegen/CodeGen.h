@@ -28,8 +28,10 @@ private:
     // ASTノードごとのvisitメソッド
     void visit(ProgramNode *node);
     void visit(StatementNode *node);
+    void visit(BlockNode *node);
     llvm::Value* visit(VarDeclNode *node);
     llvm::Value* visit(AssignmentNode *node);
+    void visit(IfNode *node);
     llvm::Value* visit(ExprNode *node);
     llvm::Value* visit(NumberLiteralNode *node);
     llvm::Value* visit(BinaryOpNode *node);

@@ -8,7 +8,14 @@ program: statement* EOF;
 
 statement
     : varDecl
+    | block
     | assignmentStatement
+    | ifStatement
+    | forStatement
+    ;
+
+block
+    : LBRACE statement* RBRACE
     ;
 
 varDecl
@@ -16,6 +23,13 @@ varDecl
     ;
 assignmentStatement
     : IDENTIFIER EQ expr SEMI
+    ;
+
+ifStatement
+    : IF expr block (ELSE block)?
+    ;
+forStatement
+    : FOR expr block # ConditionForStatement
     ;
 
 // 式ルール

@@ -1,6 +1,6 @@
 #pragma once
 #include "LumaParser.h"
-#include "../ast/AstNode.h" // 作成したASTノードのヘッダ
+#include "../ast/AstNode.h"
 #include "LumaParserVisitor.h"
 
 class AstBuilder : public Luma::LumaParserVisitor {
@@ -9,10 +9,16 @@ public:
     antlrcpp::Any visitProgram(Luma::LumaParser::ProgramContext *ctx) override;
     // statement
     antlrcpp::Any visitStatement(Luma::LumaParser::StatementContext *ctx) override;
+    // block
+    antlrcpp::Any visitBlock(Luma::LumaParser::BlockContext *ctx) override;
     // varDecl
     antlrcpp::Any visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) override;
     // assignment
     antlrcpp::Any visitAssignmentStatement(Luma::LumaParser::AssignmentStatementContext *ctx) override;
+    // if
+    antlrcpp::Any visitIfStatement(Luma::LumaParser::IfStatementContext *ctx) override;
+    // for
+    antlrcpp::Any visitConditionForStatement(Luma::LumaParser::ConditionForStatementContext *ctx) override;
     
     // expr
     antlrcpp::Any visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx) override;

@@ -6,6 +6,9 @@ options{
 // キーワード
 VAR: 'var';
 LET: 'let';
+IF: 'if';
+ELSE: 'else';
+FOR: 'for';
 // operator
 EQ: '=';
 ADD: '+';
@@ -22,6 +25,8 @@ LE: '<=';
 SEMI: ';';
 LPAREN: '(';
 RPAREN: ')';
+LBRACE: '{';
+RBRACE: '}';
 // リテラル
 INTEGER: [0-9]+;
 IDENTIFIER: [a-zA-Z][a-zA-Z0-9]*;

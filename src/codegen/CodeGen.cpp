@@ -7,6 +7,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/BasicBlock.h"
 
 CodeGen::CodeGen(){
     context = std::make_unique<llvm::LLVMContext>();
@@ -47,9 +48,18 @@ void CodeGen::visit(StatementNode* node){
         visit(varNode);
     }else if(auto assignmentNode = dynamic_cast<AssignmentNode*>(node)){
         visit(assignmentNode);
+    }else if(auto ifNode = dynamic_cast<IfNode*>(node)){
+        visit(ifNode);
     }else{
         std::cerr << "Error: unknown statement.\n";
         return;
+    }
+}
+
+// Block
+void CodeGen::visit(BlockNode* node){
+    for(const auto& stmt : node->statements){
+        visit(stmt.get());
     }
 }
 
@@ -92,6 +102,34 @@ llvm::Value* CodeGen::visit(AssignmentNode *node){
     }
     builder->CreateStore(val, address);
     return nullptr;
+}
+
+// if 条件分岐
+void CodeGen::visit(IfNode *node){
+    llvm::Value* conditionValue = visit(node->condition.get());
+    if(!conditionValue) return;
+    // ブロック生成
+    llvm::Function* currentFunction = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(*context, "then", currentFunction);
+    llvm::BasicBlock* elseBlock = llvm::BasicBlock::Create(*context, "else"); // else~がなくてもとりあえず生成
+    llvm::BasicBlock* mergeBlock = llvm::BasicBlock::Create(*context, "ifcont");
+    // 条件分岐命令を生成
+    llvm::BasicBlock* elseDestBlock = node->else_block ? elseBlock : mergeBlock;
+    builder->CreateCondBr(conditionValue, thenBlock, elseDestBlock);
+    // thenの中身を生成
+    builder->SetInsertPoint(thenBlock);
+    visit(node->if_block.get());
+    builder->CreateBr(mergeBlock);
+    // elseの中身を生成
+    if (node->else_block) {
+        currentFunction->insert(currentFunction->end(), elseBlock);
+        builder->SetInsertPoint(elseBlock);
+        visit(node->else_block.get());
+        builder->CreateBr(mergeBlock);
+    }
+    // mergeに処理を移す
+    currentFunction->insert(currentFunction->end(), mergeBlock);
+    builder->SetInsertPoint(mergeBlock);
 }
 
 // NumberLiteral 数値リテラル

@@ -28,6 +28,18 @@ antlrcpp::Any AstBuilder::visitStatement(Luma::LumaParser::StatementContext *ctx
     return result;
 }
 
+antlrcpp::Any AstBuilder::visitBlock(Luma::LumaParser::BlockContext *ctx){
+    auto blockNode = std::make_shared<BlockNode>();
+    for(auto stmtCtx : ctx->statement()){
+        antlrcpp::Any result = visit(stmtCtx);
+        if(result.has_value()){
+            blockNode->statements.push_back(std::any_cast<std::shared_ptr<StatementNode>>(result));
+        }
+    }
+    antlrcpp::Any finalResult = blockNode;
+    return finalResult;
+}
+
 antlrcpp::Any AstBuilder::visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) {
     std::string varName = ctx->IDENTIFIER()->getText();
     std::shared_ptr<ExprNode> init = nullptr;
@@ -47,6 +59,23 @@ antlrcpp::Any AstBuilder::visitAssignmentStatement(Luma::LumaParser::AssignmentS
     auto node = std::make_shared<AssignmentNode>(varName, val);
     antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
     return result;
+}
+
+antlrcpp::Any AstBuilder::visitIfStatement(Luma::LumaParser::IfStatementContext *ctx){
+    antlrcpp::Any conditionAny = visit(ctx->expr());
+    antlrcpp::Any ifblockAny = visit(ctx->block(0));
+    antlrcpp::Any elseblockAny = visit(ctx->block(1));
+    std::shared_ptr<BlockNode> elseblock = nullptr;
+    std::shared_ptr<ExprNode> condition = std::any_cast<std::shared_ptr<ExprNode>>(conditionAny);
+    std::shared_ptr<BlockNode> ifblock = std::any_cast<std::shared_ptr<BlockNode>>(ifblockAny);
+    if(ctx->block(1)) elseblock = std::any_cast<std::shared_ptr<BlockNode>>(elseblockAny);
+    auto node = std::make_shared<IfNode>(condition, ifblock, elseblock);
+    antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
+    return result;
+}
+
+antlrcpp::Any AstBuilder::visitConditionForStatement(Luma::LumaParser::ConditionForStatementContext *ctx){
+    return nullptr;
 }
 
 antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx){

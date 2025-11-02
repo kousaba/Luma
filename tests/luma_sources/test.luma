@@ -1,3 +1,7 @@
 var aaa = 10 * 5 / 2 * 5;
 var bbb = aaa + 2;
-var ccc = aaa < bbb;
+if aaa < bbb{
+    var ccc = 1;
+}else{
+    var ccc = 0;
+}
