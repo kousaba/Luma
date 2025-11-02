@@ -13,6 +13,13 @@ public:
     NumberLiteralNode(int val) : value(val){}
 };
 
+// 変数参照を表すノード
+class VariableRefNode : public ExprNode{
+public:
+    std::string name;
+    VariableRefNode(const std::string& varName) : name(varName) {}
+};
+
 // 二項演算子(例: a + b)を表すノード
 class BinaryOpNode : public ExprNode{
 public:

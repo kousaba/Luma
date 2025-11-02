@@ -11,6 +11,8 @@ public:
     antlrcpp::Any visitStatement(Luma::LumaParser::StatementContext *ctx) override;
     // varDecl
     antlrcpp::Any visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) override;
+    // assignment
+    antlrcpp::Any visitAssignmentStatement(Luma::LumaParser::AssignmentStatementContext *ctx) override;
     
     // expr
     antlrcpp::Any visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx) override;

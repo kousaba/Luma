@@ -17,6 +17,13 @@ public:
     std::shared_ptr<ExprNode> initializer;
     VarDeclNode(const std::string& name, std::shared_ptr<ExprNode> init = nullptr) : varName(name), initializer(init){}
 };
+// 変数代入文を表すノード
+class AssignmentNode : public StatementNode{
+public:
+    std::string varName;
+    std::shared_ptr<ExprNode> value;
+    AssignmentNode(const std::string& name, std::shared_ptr<ExprNode> val) : varName(name), value(val){}
+};
 
 // プログラム全体を表すノード（文のリストを持つ）
 class ProgramNode : public AstNode {

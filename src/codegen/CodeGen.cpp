@@ -45,8 +45,10 @@ void CodeGen::visit(ProgramNode* node){
 void CodeGen::visit(StatementNode* node){
     if(auto varNode = dynamic_cast<VarDeclNode*>(node)){
         visit(varNode);
+    }else if(auto assignmentNode = dynamic_cast<AssignmentNode*>(node)){
+        visit(assignmentNode);
     }else{
-        std::cerr << "Error: unknown statement";
+        std::cerr << "Error: unknown statement.\n";
         return;
     }
 }
@@ -56,6 +58,7 @@ llvm::Value* CodeGen::visit(ExprNode *node){
     // dynamic_castでどれにキャストできるか分ける
     if(auto cnode = dynamic_cast<NumberLiteralNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<BinaryOpNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
     std::cerr << "Error: ExprNode couldn't cast.\n";
     return nullptr;
 }
@@ -71,6 +74,24 @@ llvm::Value* CodeGen::visit(VarDeclNode* node){
         builder->CreateStore(initVal, allocaInst);
     }
     return 0;
+}
+
+// assignment 代入
+llvm::Value* CodeGen::visit(AssignmentNode *node){
+    std::string varName = node->varName;
+    auto it = namedValues.find(varName);
+    if(it == namedValues.end()){
+        std::cerr << "Error: Assignment to undeclared variable '" << varName << "'\n";
+        return nullptr;
+    }
+    auto address = namedValues[varName];
+    llvm::Value* val = visit(node->value.get());
+    if(!val){
+        std::cerr << "Error: Assignment of empty expression to varialbe `" << varName << "'\n";
+        return nullptr;
+    }
+    builder->CreateStore(val, address);
+    return nullptr;
 }
 
 // NumberLiteral 数値リテラル
@@ -101,4 +122,18 @@ llvm::Value* CodeGen::visit(BinaryOpNode *node){
         std::cerr << "Error: Unknown operator.\n";
         return nullptr;
     }
+}
+
+// VariableRef 変数参照
+llvm::Value* CodeGen::visit(VariableRefNode *node){
+    // シンボルテーブルから変数のアドレスを探す
+    llvm::Value* varAddress = namedValues[node->name];
+    // 変数がなかったらエラー
+    if(!varAddress){
+        std::cerr << "Error: Unknown variable name `" << node->name << "'\n";
+        return nullptr;
+    }
+    // load命令を生成
+    // 値の型, アドレス, IRのレジスタ名(デバッグ用)
+    return builder->CreateLoad(builder->getInt32Ty(), varAddress, node->name.c_str());
 }

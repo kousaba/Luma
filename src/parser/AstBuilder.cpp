@@ -40,6 +40,15 @@ antlrcpp::Any AstBuilder::visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) {
     return result;
 }
 
+antlrcpp::Any AstBuilder::visitAssignmentStatement(Luma::LumaParser::AssignmentStatementContext *ctx){
+    std::string varName = ctx->IDENTIFIER()->getText();
+    antlrcpp::Any valAny = visit(ctx->expr());
+    std::shared_ptr<ExprNode> val = std::any_cast<std::shared_ptr<ExprNode>>(valAny);
+    auto node = std::make_shared<AssignmentNode>(varName, val);
+    antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
+    return result;
+}
+
 antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx){
     if(ctx->INTEGER()){
         int val = std::stoi(ctx->INTEGER()->getText());
@@ -48,6 +57,11 @@ antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext 
         return result;
     }else if(ctx->expr()){
         return visit(ctx->expr());
+    }else if(ctx->IDENTIFIER()){
+        std::string varName = ctx->IDENTIFIER()->getText();
+        auto node = std::make_shared<VariableRefNode>(varName);
+        antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
+        return result;
     }else{
         std::cerr << "Error: Unknown primary expr.\n";
         return nullptr;

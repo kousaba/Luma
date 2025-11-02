@@ -29,7 +29,9 @@ private:
     void visit(ProgramNode *node);
     void visit(StatementNode *node);
     llvm::Value* visit(VarDeclNode *node);
+    llvm::Value* visit(AssignmentNode *node);
     llvm::Value* visit(ExprNode *node);
     llvm::Value* visit(NumberLiteralNode *node);
     llvm::Value* visit(BinaryOpNode *node);
+    llvm::Value* visit(VariableRefNode *node);
 };

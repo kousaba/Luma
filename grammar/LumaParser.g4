@@ -8,10 +8,14 @@ program: statement* EOF;
 
 statement
     : varDecl
+    | assignmentStatement
     ;
 
 varDecl
     : (VAR | LET) IDENTIFIER (EQ expr)? SEMI
+    ;
+assignmentStatement
+    : IDENTIFIER EQ expr SEMI
     ;
 
 // 式ルール
@@ -19,6 +23,7 @@ varDecl
 primaryExpr
     : INTEGER
     | LPAREN expr RPAREN
+    | IDENTIFIER
     ;
 // 乗算・除算の式
 multiplicativeExpr
