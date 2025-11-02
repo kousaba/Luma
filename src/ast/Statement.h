@@ -1,6 +1,6 @@
 #pragma once
 #include "AstNode.h"
-#include "../ast/Expression.h"
+#include "Expression.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -56,4 +56,10 @@ class ExprStatementNode : public StatementNode{
 public:
     std::shared_ptr<ExprNode> expression;
     ExprStatementNode(std::shared_ptr<ExprNode> expr) : expression(expr) {}
+};
+// Return文を表すノード
+class ReturnNode : public StatementNode{
+public:
+    std::shared_ptr<ExprNode> returnValue;
+    ReturnNode(std::shared_ptr<ExprNode> val) : returnValue(val) {}
 };

@@ -6,6 +6,7 @@
 #include "Token.h"
 #include "../ast/Expression.h"
 #include "../ast/Statement.h"
+#include "../ast/Definition.h"
 #include <cstddef>
 #include <iostream> // デバッグ用
 
@@ -28,6 +29,7 @@ antlrcpp::Any AstBuilder::visitStatement(Luma::LumaParser::StatementContext *ctx
     if(ctx->block()) return visit(ctx->block());
     if(ctx->ifStatement()) return visit(ctx->ifStatement());
     if(ctx->forStatement()) return visit(ctx->forStatement());
+    if(ctx->functionDefinition()) return visit(ctx->functionDefinition());
     if(ctx->expr()){
         antlrcpp::Any exprAny = visit(ctx->expr());
         auto exprNode = std::any_cast<std::shared_ptr<ExprNode>>(exprAny);
@@ -47,6 +49,23 @@ antlrcpp::Any AstBuilder::visitBlock(Luma::LumaParser::BlockContext *ctx){
     }
     antlrcpp::Any finalResult = blockNode;
     return finalResult;
+}
+
+antlrcpp::Any AstBuilder::visitFunctionDefinition(Luma::LumaParser::FunctionDefinitionContext *ctx){
+    std::string funcName = ctx->IDENTIFIER()->getText();
+    std::vector<std::string> args;
+    if(ctx->parameterList()) for(const auto& argCtx : ctx->parameterList()->IDENTIFIER()) args.push_back(argCtx->getText());
+    std::shared_ptr<BlockNode> body = std::any_cast<std::shared_ptr<BlockNode>>(visitBlock(ctx->block()));
+    auto node = std::make_shared<FunctionDefNode>(funcName, args, body);
+    antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
+    return result;
+}
+antlrcpp::Any AstBuilder::visitParameterList(Luma::LumaParser::ParameterListContext *ctx){
+    return nullptr;
+}
+antlrcpp::Any AstBuilder::visitReturnStatement(Luma::LumaParser::ReturnStatementContext *ctx){
+    // TOOD: return処理
+    return nullptr;
 }
 
 antlrcpp::Any AstBuilder::visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) {

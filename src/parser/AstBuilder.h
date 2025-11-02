@@ -11,6 +11,11 @@ public:
     antlrcpp::Any visitStatement(Luma::LumaParser::StatementContext *ctx) override;
     // block
     antlrcpp::Any visitBlock(Luma::LumaParser::BlockContext *ctx) override;
+    // func
+    antlrcpp::Any visitFunctionDefinition(Luma::LumaParser::FunctionDefinitionContext *ctx) override;
+    antlrcpp::Any visitParameterList(Luma::LumaParser::ParameterListContext *ctx) override;
+    // return
+    antlrcpp::Any visitReturnStatement(Luma::LumaParser::ReturnStatementContext *ctx) override;
     // varDecl
     antlrcpp::Any visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) override;
     // assignment

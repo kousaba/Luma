@@ -13,6 +13,8 @@ statement
     | ifStatement
     | forStatement
     | expr SEMI // 普通の関数呼び出し
+    | functionDefinition
+    | returnStatement
     ;
 
 block
@@ -24,6 +26,16 @@ varDecl
     ;
 assignmentStatement
     : IDENTIFIER EQ expr SEMI
+    ;
+
+functionDefinition
+    : FN IDENTIFIER '(' parameterList? ')' block
+    ;
+parameterList
+    : IDENTIFIER (COMMA IDENTIFIER)*
+    ;
+returnStatement
+    : RETURN expr? SEMI
     ;
 
 ifStatement

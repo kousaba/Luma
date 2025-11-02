@@ -3,6 +3,7 @@
 #include "CodeGen.h"
 #include "../ast/Expression.h"
 #include "../ast/Statement.h"
+#include "../ast/Definition.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/Function.h"
@@ -26,26 +27,39 @@ llvm::Module* CodeGen::getModule(){
 
 // Program
 void CodeGen::visit(ProgramNode* node){
-    // main関数を作成
-    auto funcType = llvm::FunctionType::get(builder->getInt32Ty(), false); // main関数の型(i32 main())を定義
-    auto mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "main", module.get()); // moduleにmain関数を作成
-    // IRBuilderの挿入ポイントに設定
+    // 先にすべての関数処理を生成
+    for(const auto& stmt : node->statements){
+        if(auto funcDef = dynamic_cast<FunctionDefNode*>(stmt.get())){
+            visit(funcDef);
+        }
+    }
+    auto funcType = llvm::FunctionType::get(builder->getInt32Ty(), false);
+    // 関数名デバッグ用
+    std::cout << "Creating function: main" << std::endl;
+    auto mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "", module.get());
+    mainFunc->setName("main");
+    std::cout << "LLVM Function name after setName(): " << mainFunc->getName().str() << std::endl;
+
     auto entryBlock = llvm::BasicBlock::Create(*context, "entry", mainFunc);
     builder->SetInsertPoint(entryBlock);
-    // プログラム内の各文をvisit
-    for(const auto& stmt : node->statements) visit(stmt.get());
-    // return 0を追加
+    for(const auto& stmt : node->statements){
+        if(!dynamic_cast<FunctionDefNode*>(stmt.get())){
+            visit(stmt.get());
+        }
+    }
     builder->CreateRet(builder->getInt32(0));
+    // main関数の検証
     if (llvm::verifyFunction(*mainFunc, &llvm::errs())) {
-        std::cerr << "LLVM Function Verification Failed!\n";
-    } else {
-        std::cout << "LLVM Function Verification Succeeded.\n";
+        std::cerr << "LLVM Main Function Verification Failed!\n";
     }
 }
 
 // Statement
 void CodeGen::visit(StatementNode* node){
-    if(auto varNode = dynamic_cast<VarDeclNode*>(node)){
+    if(auto funcDef = dynamic_cast<FunctionDefNode*>(node)){
+        // ProgramNodeで処理するので何もしない
+        return;
+    }else if(auto varNode = dynamic_cast<VarDeclNode*>(node)){
         visit(varNode);
     }else if(auto assignmentNode = dynamic_cast<AssignmentNode*>(node)){
         visit(assignmentNode);
@@ -70,6 +84,58 @@ void CodeGen::visit(BlockNode* node){
     }
 }
 
+// FunctionDefinition
+void CodeGen::visit(FunctionDefNode *node){
+    llvm::BasicBlock* originalBlock = builder->GetInsertBlock(); // 最後挿入場所を戻すよう
+    std::vector<llvm::Type*> argTypes;
+    // 今はintしかないのでintを入れる
+    for(const auto& type : node->parameters) argTypes.push_back(builder->getInt32Ty());
+    // 戻り値の型もとりあえずint
+    llvm::Type* returnType = builder->getInt32Ty();
+    // 関数登録
+    llvm::FunctionType* funcType = llvm::FunctionType::get(returnType, argTypes, false);
+    
+    // 関数名デバッグ用
+    std::cout << "Creating function: " << node->name << std::endl;
+    auto func = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "", module.get());
+    func->setName(node->name.c_str());
+    std::cout << "LLVM Function name after setName(): " << func->getName().str() << std::endl;
+
+    auto entryBlock = llvm::BasicBlock::Create(*context, "entry", func);
+    builder->SetInsertPoint(entryBlock);
+    // 新しいスコープのためのシンボルテーブルを用意
+    std::map<std::string, llvm::Value*> namedValuesInFunc;
+    auto originalNamedValues = namedValues;
+    // 関数の引数イテレータとASTの仮引数名リストを同時にループ
+    auto param_it = node->parameters.begin();
+    for(auto& arg: func->args()){
+        // 引数に名前をつける
+        std::string paramName = *param_it;
+        arg.setName(paramName);
+        // メモリ確保・値を代入・シンボルテーブル登録
+        auto allocaInst = builder->CreateAlloca(arg.getType(), nullptr, paramName);
+        builder->CreateStore(&arg, allocaInst);
+        namedValuesInFunc[paramName] = allocaInst;
+        param_it++;
+    }
+    namedValues = namedValuesInFunc;
+    visit(node->body.get());
+
+    // return命令がない場合に自動で追加
+    if (!builder->GetInsertBlock()->getTerminator()) {
+        builder->CreateRet(builder->getInt32(0));
+    }
+
+    // 関数の検証
+    if (llvm::verifyFunction(*func, &llvm::errs())) {
+        std::cerr << "LLVM Function " << node->name << " Verification Failed!\n";
+    }
+
+    // シンボルテーブルをもとに戻す
+    namedValues = originalNamedValues;
+    if(originalBlock) builder->SetInsertPoint(originalBlock); // 元の場所に戻す
+}
+
 // Expr
 llvm::Value* CodeGen::visit(ExprNode *node){
     // dynamic_castでどれにキャストできるか分ける
@@ -77,7 +143,7 @@ llvm::Value* CodeGen::visit(ExprNode *node){
     if(auto cnode = dynamic_cast<BinaryOpNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<FunctionCallNode*>(node)) return visit(cnode);
-    std::cerr << "Error: ExprNode couldn't cast.\n";
+    std::cerr << "Error: ExprNode couldn\'t cast.\n";
     return nullptr;
 }
 
@@ -91,7 +157,30 @@ llvm::Value* CodeGen::visit(FunctionCallNode *node){
     // TODO: 組み込み関数以外にも対応させる
     if(node->calleeName == "print") return generatePrintCall(node);
     if(node->calleeName == "input") return generateInputCall(node);
-    std::cerr << "Error: Unknown function called: " << node->calleeName << "\n";
+    if(auto func = module->getFunction(node->calleeName)){
+        llvm::Function* calleeFunc = module->getFunction(node->calleeName);
+        if(!calleeFunc){
+            std::cerr << "Error: Call to undefined function '" << node->calleeName << "'\n";
+            return nullptr;
+        }
+        if(calleeFunc->arg_size() != node->args.size()){
+            std::cerr << "Error: Incorrect number of arguments passed to function '" << node->calleeName << "'\n";
+            return nullptr;
+        }
+        // ASTの引数リストをvisitして、llvm::Value*のvectorに変換
+        std::vector<llvm::Value*> argsVec;
+        for(const auto& argExpr : node->args){
+            llvm::Value *argValue = visit(argExpr.get());
+            if(!argValue){
+                std::cerr << "Error: Unknown error happend in function call.\n";
+                return nullptr;
+            }
+            argsVec.push_back(argValue);
+        }
+        // call命令を生成
+        std::string retName = node->calleeName + "_ret";
+        return builder->CreateCall(calleeFunc, argsVec, retName);
+    }
     return nullptr;
 }
 

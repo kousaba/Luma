@@ -1,3 +1,4 @@
+#pragma once
 #include <map>
 
 #include "llvm/IR/LLVMContext.h"
@@ -6,6 +7,7 @@
 
 #include "../ast/AstNode.h"
 #include "../ast/Statement.h"
+#include "../ast/Definition.h"
 
 class CodeGen{
 private:
@@ -29,6 +31,7 @@ private:
     void visit(ProgramNode *node);
     void visit(StatementNode *node);
     void visit(BlockNode *node);
+    void visit(FunctionDefNode *node);
     llvm::Value* visit(VarDeclNode *node);
     llvm::Value* visit(AssignmentNode *node);
     void visit(IfNode *node);

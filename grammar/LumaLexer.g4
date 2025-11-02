@@ -9,6 +9,8 @@ LET: 'let';
 IF: 'if';
 ELSE: 'else';
 FOR: 'for';
+FN: 'fn';
+RETURN: 'return';
 // operator
 EQ: '=';
 ADD: '+';
