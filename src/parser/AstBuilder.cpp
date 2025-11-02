@@ -75,7 +75,13 @@ antlrcpp::Any AstBuilder::visitIfStatement(Luma::LumaParser::IfStatementContext 
 }
 
 antlrcpp::Any AstBuilder::visitConditionForStatement(Luma::LumaParser::ConditionForStatementContext *ctx){
-    return nullptr;
+    antlrcpp::Any conditionAny = visit(ctx->expr());
+    antlrcpp::Any blockAny = visit(ctx->block());
+    std::shared_ptr<ExprNode> condition = std::any_cast<std::shared_ptr<ExprNode>>(conditionAny);
+    std::shared_ptr<BlockNode> block = std::any_cast<std::shared_ptr<BlockNode>>(blockAny);
+    auto node = std::make_shared<ForNode>(condition, block);
+    antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
+    return result;
 }
 
 antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx){

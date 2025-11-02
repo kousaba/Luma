@@ -2,7 +2,7 @@
 #include "CodeGen.h"
 #include "../ast/Expression.h"
 #include "../ast/Statement.h"
-#include <llvm/IR/IRBuilder.h>
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
@@ -50,6 +50,8 @@ void CodeGen::visit(StatementNode* node){
         visit(assignmentNode);
     }else if(auto ifNode = dynamic_cast<IfNode*>(node)){
         visit(ifNode);
+    }else if(auto forNode = dynamic_cast<ForNode*>(node)){
+        visit(forNode);
     }else{
         std::cerr << "Error: unknown statement.\n";
         return;
@@ -107,12 +109,15 @@ llvm::Value* CodeGen::visit(AssignmentNode *node){
 // if 条件分岐
 void CodeGen::visit(IfNode *node){
     llvm::Value* conditionValue = visit(node->condition.get());
-    if(!conditionValue) return;
+    if (!conditionValue) {
+        std::cerr << "Error: The condition expression of if is an unknown expression.\n";
+        return;
+    }
     // ブロック生成
     llvm::Function* currentFunction = builder->GetInsertBlock()->getParent();
     llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(*context, "then", currentFunction);
     llvm::BasicBlock* elseBlock = llvm::BasicBlock::Create(*context, "else"); // else~がなくてもとりあえず生成
-    llvm::BasicBlock* mergeBlock = llvm::BasicBlock::Create(*context, "ifcont");
+    llvm::BasicBlock* mergeBlock = llvm::BasicBlock::Create(*context, "ifcond");
     // 条件分岐命令を生成
     llvm::BasicBlock* elseDestBlock = node->else_block ? elseBlock : mergeBlock;
     builder->CreateCondBr(conditionValue, thenBlock, elseDestBlock);
@@ -130,6 +135,27 @@ void CodeGen::visit(IfNode *node){
     // mergeに処理を移す
     currentFunction->insert(currentFunction->end(), mergeBlock);
     builder->SetInsertPoint(mergeBlock);
+}
+
+// for
+void CodeGen::visit(ForNode *node){
+    // ブロック生成
+    llvm::Function* currentFunction = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* loopHeaderBlock = llvm::BasicBlock::Create(*context, "loopHeader", currentFunction);
+    llvm::BasicBlock* loopBodyBlock = llvm::BasicBlock::Create(*context, "loopBody", currentFunction);
+    llvm::BasicBlock* afterLoopBlock = llvm::BasicBlock::Create(*context, "afterLoop", currentFunction);
+    builder->CreateBr(loopHeaderBlock);
+    builder->SetInsertPoint(loopHeaderBlock);
+    llvm::Value* conditionValue = visit(node->condition.get());
+    if (!conditionValue) {
+        std::cerr << "Error: The condition expression of for is an unknown expression.\n";
+        return;
+    }
+    builder->CreateCondBr(conditionValue, loopBodyBlock, afterLoopBlock);
+    builder->SetInsertPoint(loopBodyBlock);
+    visit(node->block.get());
+    builder->CreateBr(loopHeaderBlock);
+    builder->SetInsertPoint(afterLoopBlock);
 }
 
 // NumberLiteral 数値リテラル

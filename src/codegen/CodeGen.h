@@ -32,6 +32,7 @@ private:
     llvm::Value* visit(VarDeclNode *node);
     llvm::Value* visit(AssignmentNode *node);
     void visit(IfNode *node);
+    void visit(ForNode *node);
     llvm::Value* visit(ExprNode *node);
     llvm::Value* visit(NumberLiteralNode *node);
     llvm::Value* visit(BinaryOpNode *node);
