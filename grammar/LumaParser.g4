@@ -12,6 +12,7 @@ statement
     | assignmentStatement
     | ifStatement
     | forStatement
+    | expr SEMI // 普通の関数呼び出し
     ;
 
 block
@@ -36,8 +37,17 @@ forStatement
 // プライマリ式: 式の最小単位(数値リテラルなど)
 primaryExpr
     : INTEGER
+    | functionCallExpr
     | LPAREN expr RPAREN
     | IDENTIFIER
+    ;
+// 関数呼び出し
+functionCallExpr
+    : IDENTIFIER LPAREN argList? RPAREN
+    ;
+// 引数リスト
+argList
+    : expr (COMMA expr)*
     ;
 // 乗算・除算の式
 multiplicativeExpr
@@ -54,3 +64,4 @@ comparisonExpr
 expr
     : comparisonExpr
     ;
+

@@ -1,5 +1,3 @@
-var aaa = 10 * 5 / 2 * 5;
-var bbb = aaa + 2;
-for aaa < bbb{
-    var ccc = 1;
-}
+var a;
+input(a);
+print(a);

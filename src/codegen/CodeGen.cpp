@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 #include "CodeGen.h"
 #include "../ast/Expression.h"
 #include "../ast/Statement.h"
@@ -52,7 +53,11 @@ void CodeGen::visit(StatementNode* node){
         visit(ifNode);
     }else if(auto forNode = dynamic_cast<ForNode*>(node)){
         visit(forNode);
-    }else{
+    }else if(auto exprStmtNode = dynamic_cast<ExprStatementNode*>(node)){
+        visit(exprStmtNode);
+    }
+    
+    else{
         std::cerr << "Error: unknown statement.\n";
         return;
     }
@@ -71,8 +76,75 @@ llvm::Value* CodeGen::visit(ExprNode *node){
     if(auto cnode = dynamic_cast<NumberLiteralNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<BinaryOpNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<FunctionCallNode*>(node)) return visit(cnode);
     std::cerr << "Error: ExprNode couldn't cast.\n";
     return nullptr;
+}
+
+// ExprStmt
+void CodeGen::visit(ExprStatementNode* node){
+    visit(node->expression.get());
+}
+
+// FunctionCall 関数呼び出し
+llvm::Value* CodeGen::visit(FunctionCallNode *node){
+    // TODO: 組み込み関数以外にも対応させる
+    if(node->calleeName == "print") return generatePrintCall(node);
+    if(node->calleeName == "input") return generateInputCall(node);
+    std::cerr << "Error: Unknown function called: " << node->calleeName << "\n";
+    return nullptr;
+}
+
+// input・print
+llvm::Value* CodeGen::generatePrintCall(FunctionCallNode *node){
+    // printf関数のプロトタイプを取得
+    llvm::Function* printfFunc = module->getFunction("printf");
+    if(!printfFunc){
+        llvm::Type* charPtrType = llvm::PointerType::get(*context, 0);
+        llvm::FunctionType* printfType = llvm::FunctionType::get(
+            builder->getInt32Ty(),
+            charPtrType,
+            true
+        );
+        printfFunc = llvm::Function::Create(printfType, llvm::Function::ExternalLinkage, "printf", module.get());
+    }
+    // 引数を準備
+    std::vector<llvm::Value*> args;
+    llvm::Value* formatStr = builder->CreateGlobalStringPtr("%d\n");
+    args.push_back(formatStr);
+    for(const auto& argExpr : node->args){
+        args.push_back(visit(argExpr.get()));
+    }
+    return builder->CreateCall(printfFunc, args, "printfCall");
+}
+llvm::Value* CodeGen::generateInputCall(FunctionCallNode *node){
+    // scanf関数のプロトタイプを取得
+    llvm::Function* scanfFunc = module->getFunction("scanf");
+    if(!scanfFunc){
+        llvm::Type* charPtrType = llvm::PointerType::get(*context, 0);
+        llvm::FunctionType* scanfType = llvm::FunctionType::get(builder->getInt32Ty(), charPtrType, true);
+        scanfFunc = llvm::Function::Create(scanfType, llvm::Function::ExternalLinkage, "scanf", module.get());
+    }
+    // 引数を準備
+    std::vector<llvm::Value*> args;
+    llvm::Value* formatStr = builder->CreateGlobalStringPtr("%d");
+    args.push_back(formatStr);
+    if(node->args.size() != 1){
+        std::cerr << "Error: too many arguments to input function.\n";
+        return nullptr;
+    }
+    auto varRef = std::dynamic_pointer_cast<VariableRefNode>(node->args[0]);
+    if(!varRef){
+        std::cerr << "Error: Unknown argument to input function.\n";
+        return nullptr;
+    }
+    llvm::Value* varAddress = namedValues[varRef->name];
+    if(!varAddress){
+        std::cerr << "Error: unknown variable to input function.\n";
+        return nullptr;
+    }
+    args.push_back(varAddress);
+    return builder->CreateCall(scanfFunc, args, "scanfCall");
 }
 
 // varDecl 変数宣言

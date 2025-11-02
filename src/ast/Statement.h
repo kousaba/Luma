@@ -51,3 +51,9 @@ public:
     std::shared_ptr<BlockNode> block;
     ForNode(std::shared_ptr<ExprNode> cond, std::shared_ptr<BlockNode> bnode) : condition(cond), block(bnode){}
 };
+// 式文を表すノード(print(123); や a = 5;など)
+class ExprStatementNode : public StatementNode{
+public:
+    std::shared_ptr<ExprNode> expression;
+    ExprStatementNode(std::shared_ptr<ExprNode> expr) : expression(expr) {}
+};

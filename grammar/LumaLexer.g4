@@ -23,6 +23,7 @@ GE: '>=';
 LE: '<=';
 // 記号
 SEMI: ';';
+COMMA: ',';
 LPAREN: '(';
 RPAREN: ')';
 LBRACE: '{';

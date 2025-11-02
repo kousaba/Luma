@@ -24,8 +24,17 @@ antlrcpp::Any AstBuilder::visitProgram(Luma::LumaParser::ProgramContext *ctx) {
 }
 
 antlrcpp::Any AstBuilder::visitStatement(Luma::LumaParser::StatementContext *ctx) {
-    antlrcpp::Any result = visitChildren(ctx); // 子を訪問
-    return result;
+    if(ctx->varDecl()) return visit(ctx->varDecl());
+    if(ctx->block()) return visit(ctx->block());
+    if(ctx->ifStatement()) return visit(ctx->ifStatement());
+    if(ctx->forStatement()) return visit(ctx->forStatement());
+    if(ctx->expr()){
+        antlrcpp::Any exprAny = visit(ctx->expr());
+        auto exprNode = std::any_cast<std::shared_ptr<ExprNode>>(exprAny);
+        auto stmtNode = std::make_shared<ExprStatementNode>(exprNode);
+        return std::shared_ptr<StatementNode>(stmtNode);
+    }
+    return {};
 }
 
 antlrcpp::Any AstBuilder::visitBlock(Luma::LumaParser::BlockContext *ctx){
@@ -97,10 +106,33 @@ antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext 
         auto node = std::make_shared<VariableRefNode>(varName);
         antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
         return result;
+    }else if(ctx->functionCallExpr()){
+        return visit(ctx->functionCallExpr());
     }else{
         std::cerr << "Error: Unknown primary expr.\n";
         return nullptr;
     }
+}
+
+antlrcpp::Any AstBuilder::visitFunctionCallExpr(Luma::LumaParser::FunctionCallExprContext *ctx){
+    std::string funcName = ctx->IDENTIFIER()->getText();
+    std::vector<std::shared_ptr<ExprNode>> args;
+    if(ctx->argList()){
+        for(const auto& exprCtx : ctx->argList()->expr()){
+            antlrcpp::Any argAny = visit(exprCtx);
+            std::shared_ptr<ExprNode> arg = std::any_cast<std::shared_ptr<ExprNode>>(argAny);
+            args.push_back(arg);
+        }
+    }
+    auto node = std::make_shared<FunctionCallNode>(funcName, args);
+    return std::shared_ptr<ExprNode>(node);
+}
+
+antlrcpp::Any AstBuilder::visitArgList(Luma::LumaParser::ArgListContext *ctx){
+    // 現在は何も実行するものがない(ctx->argList()->arg)などで呼び出しているので
+    // 実行するものがない
+    // とりあえずnullptrを返す
+    return nullptr;
 }
 
 antlrcpp::Any AstBuilder::visitAdditiveExpr(Luma::LumaParser::AdditiveExprContext *ctx){

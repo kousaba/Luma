@@ -22,6 +22,8 @@ public:
     
     // expr
     antlrcpp::Any visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx) override;
+    antlrcpp::Any visitFunctionCallExpr(Luma::LumaParser::FunctionCallExprContext *ctx) override;
+    antlrcpp::Any visitArgList(Luma::LumaParser::ArgListContext *ctx) override;
     antlrcpp::Any visitAdditiveExpr(Luma::LumaParser::AdditiveExprContext *ctx) override;
     antlrcpp::Any visitMultiplicativeExpr(Luma::LumaParser::MultiplicativeExprContext *ctx) override;
     antlrcpp::Any visitComparisonExpr(Luma::LumaParser::ComparisonExprContext *ctx) override;

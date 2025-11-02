@@ -34,7 +34,13 @@ private:
     void visit(IfNode *node);
     void visit(ForNode *node);
     llvm::Value* visit(ExprNode *node);
+    void visit(ExprStatementNode* node);
+    llvm::Value* visit(FunctionCallNode *node);
     llvm::Value* visit(NumberLiteralNode *node);
     llvm::Value* visit(BinaryOpNode *node);
     llvm::Value* visit(VariableRefNode *node);
+
+    // print・input用
+    llvm::Value* generatePrintCall(FunctionCallNode* node);
+    llvm::Value* generateInputCall(FunctionCallNode* node);
 };
