@@ -10,6 +10,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/BasicBlock.h"
+#include "common/Global.h"
 
 CodeGen::CodeGen(){
     context = std::make_unique<llvm::LLVMContext>();
@@ -23,6 +24,10 @@ void CodeGen::generate(ProgramNode* root){
 
 llvm::Module* CodeGen::getModule(){
     return module.get();
+}
+
+std::unique_ptr<llvm::Module> CodeGen::releaseModule(){
+    return std::move(module);
 }
 
 // Program
@@ -50,7 +55,7 @@ void CodeGen::visit(ProgramNode* node){
     builder->CreateRet(builder->getInt32(0));
     // main関数の検証
     if (llvm::verifyFunction(*mainFunc, &llvm::errs())) {
-        std::cerr << "LLVM Main Function Verification Failed!\n";
+        errorHandler.errorReg("LLVM Main Function Verification Failed!\n", 0);
     }
 }
 
@@ -70,10 +75,8 @@ void CodeGen::visit(StatementNode* node){
     }else if(auto exprStmtNode = dynamic_cast<ExprStatementNode*>(node)){
         visit(exprStmtNode);
     }
-    
     else{
-        std::cerr << "Error: unknown statement.\n";
-        return;
+        errorHandler.errorReg("Unknown Statement visited.", 0);
     }
 }
 
@@ -96,7 +99,7 @@ void CodeGen::visit(FunctionDefNode *node){
     llvm::FunctionType* funcType = llvm::FunctionType::get(returnType, argTypes, false);
     
     // 関数名デバッグ用
-    std::cout << "Creating function: " << node->name << std::endl;
+    errorHandler.errorReg("Creating function: " + node->name, 2);
     auto func = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "", module.get());
     func->setName(node->name.c_str());
     std::cout << "LLVM Function name after setName(): " << func->getName().str() << std::endl;
@@ -129,6 +132,7 @@ void CodeGen::visit(FunctionDefNode *node){
     // 関数の検証
     if (llvm::verifyFunction(*func, &llvm::errs())) {
         std::cerr << "LLVM Function " << node->name << " Verification Failed!\n";
+        errorHandler.errorReg("LLVM Function " + node-> name + " Vertification Failed!", 0);
     }
 
     // シンボルテーブルをもとに戻す
@@ -144,6 +148,7 @@ llvm::Value* CodeGen::visit(ExprNode *node){
     if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<FunctionCallNode*>(node)) return visit(cnode);
     std::cerr << "Error: ExprNode couldn\'t cast.\n";
+    errorHandler.errorReg("ExprNode couldn't cast.\n\t This is compilers error.", 0);
     return nullptr;
 }
 
@@ -161,20 +166,18 @@ llvm::Value* CodeGen::visit(FunctionCallNode *node){
         llvm::Function* calleeFunc = module->getFunction(node->calleeName);
         if(!calleeFunc){
             std::cerr << "Error: Call to undefined function '" << node->calleeName << "'\n";
+            errorHandler.errorReg("Call to undefined function '" + node->calleeName, 0);
             return nullptr;
         }
         if(calleeFunc->arg_size() != node->args.size()){
-            std::cerr << "Error: Incorrect number of arguments passed to function '" << node->calleeName << "'\n";
+            errorHandler.errorReg("Incorrect number of arguments passed to function '" + node->calleeName , 0);
             return nullptr;
         }
         // ASTの引数リストをvisitして、llvm::Value*のvectorに変換
         std::vector<llvm::Value*> argsVec;
         for(const auto& argExpr : node->args){
             llvm::Value *argValue = visit(argExpr.get());
-            if(!argValue){
-                std::cerr << "Error: Unknown error happend in function call.\n";
-                return nullptr;
-            }
+            errorHandler.conditionErrorReg(!argValue, "Unknown error happend in function call.\n", 0);
             argsVec.push_back(argValue);
         }
         // call命令を生成
@@ -219,17 +222,17 @@ llvm::Value* CodeGen::generateInputCall(FunctionCallNode *node){
     llvm::Value* formatStr = builder->CreateGlobalStringPtr("%d");
     args.push_back(formatStr);
     if(node->args.size() != 1){
-        std::cerr << "Error: too many arguments to input function.\n";
+        errorHandler.errorReg("too many arguments to input function.", 0);
         return nullptr;
     }
     auto varRef = std::dynamic_pointer_cast<VariableRefNode>(node->args[0]);
     if(!varRef){
-        std::cerr << "Error: Unknown argument to input function.\n";
+        errorHandler.errorReg("Unknown argument to input function.", 0);
         return nullptr;
     }
     llvm::Value* varAddress = namedValues[varRef->name];
     if(!varAddress){
-        std::cerr << "Error: unknown variable to input function.\n";
+        errorHandler.errorReg("Unknown variable to input function.", 0);
         return nullptr;
     }
     args.push_back(varAddress);
@@ -254,13 +257,13 @@ llvm::Value* CodeGen::visit(AssignmentNode *node){
     std::string varName = node->varName;
     auto it = namedValues.find(varName);
     if(it == namedValues.end()){
-        std::cerr << "Error: Assignment to undeclared variable '" << varName << "'\n";
+        errorHandler.errorReg("Assignment to undeclared variable '" + varName + "'",0);
         return nullptr;
     }
     auto address = namedValues[varName];
     llvm::Value* val = visit(node->value.get());
     if(!val){
-        std::cerr << "Error: Assignment of empty expression to varialbe `" << varName << "'\n";
+        errorHandler.errorReg("Assignment of empty expression to variable '" + varName + "'", 0);
         return nullptr;
     }
     builder->CreateStore(val, address);
@@ -270,10 +273,7 @@ llvm::Value* CodeGen::visit(AssignmentNode *node){
 // if 条件分岐
 void CodeGen::visit(IfNode *node){
     llvm::Value* conditionValue = visit(node->condition.get());
-    if (!conditionValue) {
-        std::cerr << "Error: The condition expression of if is an unknown expression.\n";
-        return;
-    }
+    errorHandler.conditionErrorReg(!conditionValue, "The condition expression of if is an unknown expression.", 1);
     // ブロック生成
     llvm::Function* currentFunction = builder->GetInsertBlock()->getParent();
     llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(*context, "then", currentFunction);
@@ -308,10 +308,7 @@ void CodeGen::visit(ForNode *node){
     builder->CreateBr(loopHeaderBlock);
     builder->SetInsertPoint(loopHeaderBlock);
     llvm::Value* conditionValue = visit(node->condition.get());
-    if (!conditionValue) {
-        std::cerr << "Error: The condition expression of for is an unknown expression.\n";
-        return;
-    }
+    errorHandler.conditionErrorReg(!conditionValue, "The condition expression of for is an unknown expression.", 1);
     builder->CreateCondBr(conditionValue, loopBodyBlock, afterLoopBlock);
     builder->SetInsertPoint(loopBodyBlock);
     visit(node->block.get());
@@ -331,7 +328,7 @@ llvm::Value* CodeGen::visit(BinaryOpNode *node){
     llvm::Value* lval = visit(node->left.get());
     llvm::Value* rval = visit(node->right.get());
     if (!lval || !rval) {
-        std::cerr << "Error: One of the operands in a binary operation is null.\n";
+        errorHandler.errorReg("One of the operands in a binary operation is null.", 0);
         return nullptr; 
     }
     // opを確認
@@ -358,7 +355,7 @@ llvm::Value* CodeGen::visit(BinaryOpNode *node){
     }
 
     else{
-        std::cerr << "Error: Unknown operator.\n";
+        errorHandler.errorReg("Unknown binary operator.", 0);
         return nullptr;
     }
 }
@@ -369,7 +366,7 @@ llvm::Value* CodeGen::visit(VariableRefNode *node){
     llvm::Value* varAddress = namedValues[node->name];
     // 変数がなかったらエラー
     if(!varAddress){
-        std::cerr << "Error: Unknown variable name `" << node->name << "'\n";
+        errorHandler.errorReg("Unknown variable name '" + node->name + "'", 0);
         return nullptr;
     }
     // load命令を生成

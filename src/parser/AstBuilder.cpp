@@ -7,6 +7,7 @@
 #include "../ast/Expression.h"
 #include "../ast/Statement.h"
 #include "../ast/Definition.h"
+#include "common/Global.h"
 #include <cstddef>
 #include <iostream> // デバッグ用
 
@@ -26,6 +27,7 @@ antlrcpp::Any AstBuilder::visitProgram(Luma::LumaParser::ProgramContext *ctx) {
 
 antlrcpp::Any AstBuilder::visitStatement(Luma::LumaParser::StatementContext *ctx) {
     if(ctx->varDecl()) return visit(ctx->varDecl());
+    if(ctx->assignmentStatement()) return visit(ctx->assignmentStatement());
     if(ctx->block()) return visit(ctx->block());
     if(ctx->ifStatement()) return visit(ctx->ifStatement());
     if(ctx->forStatement()) return visit(ctx->forStatement());
@@ -128,7 +130,7 @@ antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext 
     }else if(ctx->functionCallExpr()){
         return visit(ctx->functionCallExpr());
     }else{
-        std::cerr << "Error: Unknown primary expr.\n";
+        errorHandler.errorReg("Unknown primary expr.", 0);
         return nullptr;
     }
 }

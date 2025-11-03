@@ -26,6 +26,7 @@ public:
     void generate(ProgramNode *root);
     // 生成したModuleを外部に渡すメソッド
     llvm::Module* getModule();
+    std::unique_ptr<llvm::Module> releaseModule();
 private:
     // ASTノードごとのvisitメソッド
     void visit(ProgramNode *node);

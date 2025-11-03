@@ -65,6 +65,7 @@ add_executable(Luma
     src/main.cpp
     src/parser/AstBuilder.cpp
     src/codegen/CodeGen.cpp
+    src/common/ErrorHandler.cpp
     ${ANTLR_GENERATED_DIR}/LumaLexer.cpp   # 個別に指定
     ${ANTLR_GENERATED_DIR}/LumaParser.cpp
     ${ANTLR_GENERATED_DIR}/LumaParserVisitor.cpp
@@ -78,11 +79,12 @@ target_include_directories(Luma PRIVATE
     ${ANTLR_GENERATED_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/generated
     ${CMAKE_CURRENT_SOURCE_DIR}/external/antlr4-cpp-runtime-4.13.2-source/runtime/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_compile_definitions(Luma PRIVATE ${LLVM_DEFINITIONS})
 
-llvm_map_components_to_libnames(LLVM_LIBS core irreader support)
+llvm_map_components_to_libnames(LLVM_LIBS core irreader support executionengine orcjit native)
 target_link_libraries(Luma PRIVATE
     antlr4-runtime
     ${LLVM_LIBS}

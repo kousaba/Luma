@@ -11,7 +11,10 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/LLVMContext.h"
+#include "llvm/ExecutionEngine/Orc/LLJIT.h"
+#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
+#include "llvm/Support/TargetSelect.h"
+
 
 // AST
 #include "parser/AstBuilder.h"
@@ -19,6 +22,8 @@
 
 // CodeGen
 #include "codegen/CodeGen.h"
+// ErrorHandler
+#include "common/Global.h"
 
 using namespace antlr4;
 
@@ -41,31 +46,49 @@ int main(int argc, char* argv[]){
     
     tree::ParseTree* tree = parser.program();
     
-    std::cout << "--- Parse Tree ---\n";
-    std::cout << tree->toStringTree(&parser) << "\n\n";
-
-    // --- AST構築 ---
-    std::cout << "--- AST Construction Trace ---\n";
     AstBuilder astBuilder;
-    antlrcpp::Any astRootAny = astBuilder.visit(tree); // ここでビジターが動く
+    antlrcpp::Any astRootAny = astBuilder.visit(tree);
 
-    std::cout << "\n--- AST Construction Result ---\n";
     if(astRootAny.has_value()){
         try{
             auto progNode = std::any_cast<std::shared_ptr<ProgramNode>>(astRootAny);
-            // LLVM IR生成
-            std::cout << "\n--- Generated LLVM IR ---\n";
             CodeGen codeGenerator;
-            codeGenerator.generate(progNode.get()); // コード生成を開始
+            codeGenerator.generate(progNode.get());
+            auto context = std::make_unique<llvm::LLVMContext>();
             llvm::Module* module = codeGenerator.getModule();
-            if (llvm::verifyModule(*codeGenerator.getModule(), &llvm::errs())) {
+            if (llvm::verifyModule(*module, &llvm::errs())) {
                 std::cerr << "LLVM Module Verification Failed!\n";
+                return 1;
             }
-            // 生成されたIRをコンソールに出力
-            std::cout << "\n--- Generated LLVM IR ---\n";
-            if(module){
-                module->print(llvm::errs(), nullptr);
+
+            llvm::InitializeNativeTarget();
+            llvm::InitializeNativeTargetAsmPrinter();
+
+            auto jit = llvm::orc::LLJITBuilder().create();
+            if(!jit){
+                std::cerr << "Failed to create LLJIT instance: " << toString(jit.takeError()) << "\n";
+                return 1;
             }
+
+            auto threadSafeModule = llvm::orc::ThreadSafeModule(codeGenerator.releaseModule(), std::move(context));
+            
+            auto err = (*jit)->addIRModule(std::move(threadSafeModule));
+            if(err){
+                std::cerr << "Failed to add IR module: " << toString(std::move(err)) << "\n";
+                return 1;
+            }
+
+            auto mainFuncSym = (*jit)->lookup("main");
+            if(!mainFuncSym){
+                std::cerr << "Could not find main function: " << toString(mainFuncSym.takeError()) << "\n";
+                return 1;
+            }
+
+            auto* mainFunc = mainFuncSym->toPtr<int()>();
+            if(!mainFunc) { return 1; }
+            mainFunc();
+            errorHandler.errorReg("Compile Finished!", 2);
+            errorHandler.printAllErrors();
         }catch (const std::bad_any_cast& e) {
             std::cerr << "AST construction failed: returned type is not ProgramNode.\n";
         }
