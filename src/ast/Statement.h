@@ -1,6 +1,7 @@
 #pragma once
 #include "AstNode.h"
 #include "Expression.h"
+#include "types/Type.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -27,7 +28,8 @@ public:
     std::string varName;
     // 初期化式を保持するポインタ(式がない場合はnullptr)
     std::shared_ptr<ExprNode> initializer;
-    VarDeclNode(const std::string& name, std::shared_ptr<ExprNode> init = nullptr) : varName(name), initializer(init){}
+    std::shared_ptr<TypeNode> type;
+    VarDeclNode(const std::string& name, std::shared_ptr<TypeNode> t, std::shared_ptr<ExprNode> init) : varName(name), type(t),initializer(init){}
 };
 // 変数代入文を表すノード
 class AssignmentNode : public StatementNode{

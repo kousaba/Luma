@@ -1,4 +1,6 @@
+#include <cassert>
 #include <iostream>
+#include <llvm-18/llvm/IR/Constants.h>
 #include <memory>
 #include "CodeGen.h"
 #include "../ast/Expression.h"
@@ -30,33 +32,33 @@ std::unique_ptr<llvm::Module> CodeGen::releaseModule(){
     return std::move(module);
 }
 
+llvm::Type* CodeGen::translateType(std::string name){
+    if(name == "int") return builder->getInt64Ty();
+    if(name == "int32" || name == "i32") return builder->getInt32Ty();
+    if(name == "char") return builder->getInt8Ty();
+    if(name == "float") return builder->getDoubleTy();
+    if(name == "float32") return builder->getFloatTy();
+    errorHandler.errorReg("Unknown Type.", 0);
+    return nullptr;
+}
+
 // Program
 void CodeGen::visit(ProgramNode* node){
-    // 先にすべての関数処理を生成
-    for(const auto& stmt : node->statements){
-        if(auto funcDef = dynamic_cast<FunctionDefNode*>(stmt.get())){
-            visit(funcDef);
-        }
-    }
-    auto funcType = llvm::FunctionType::get(builder->getInt32Ty(), false);
-    // 関数名デバッグ用
-    std::cout << "Creating function: main" << std::endl;
-    auto mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "", module.get());
-    mainFunc->setName("main");
-    std::cout << "LLVM Function name after setName(): " << mainFunc->getName().str() << std::endl;
-
-    auto entryBlock = llvm::BasicBlock::Create(*context, "entry", mainFunc);
+    // main関数を定義
+    llvm::FunctionType* funcType = llvm::FunctionType::get(builder->getInt32Ty(), false);
+    llvm::Function* mainFunc = llvm::Function::Create(funcType, llvm::Function::ExternalLinkage, "main", module.get());
+    // エントリーブロック作成
+    llvm::BasicBlock* entryBlock = llvm::BasicBlock::Create(*context, "entry", mainFunc);
     builder->SetInsertPoint(entryBlock);
-    for(const auto& stmt : node->statements){
-        if(!dynamic_cast<FunctionDefNode*>(stmt.get())){
-            visit(stmt.get());
-        }
-    }
+    // main関数スコープのためのシンボルテーブル
+    auto originalNamedValues = namedValues;
+    namedValues.clear();
+    // 各文をvisit
+    for(auto& stmt : node->statements) visit(stmt.get());
+    // 最後にreturn 0;を追加
     builder->CreateRet(builder->getInt32(0));
-    // main関数の検証
-    if (llvm::verifyFunction(*mainFunc, &llvm::errs())) {
-        errorHandler.errorReg("LLVM Main Function Verification Failed!\n", 0);
-    }
+    // もとに戻す
+    namedValues = originalNamedValues;
 }
 
 // Statement
@@ -144,9 +146,11 @@ void CodeGen::visit(FunctionDefNode *node){
 llvm::Value* CodeGen::visit(ExprNode *node){
     // dynamic_castでどれにキャストできるか分ける
     if(auto cnode = dynamic_cast<NumberLiteralNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<DecimalLiteralNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<BinaryOpNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<FunctionCallNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<CastNode*>(node)) return visit(cnode);
     std::cerr << "Error: ExprNode couldn\'t cast.\n";
     errorHandler.errorReg("ExprNode couldn't cast.\n\t This is compilers error.", 0);
     return nullptr;
@@ -202,11 +206,28 @@ llvm::Value* CodeGen::generatePrintCall(FunctionCallNode *node){
     }
     // 引数を準備
     std::vector<llvm::Value*> args;
-    llvm::Value* formatStr = builder->CreateGlobalStringPtr("%d\n");
-    args.push_back(formatStr);
+    std::string formatStr = "";
+
     for(const auto& argExpr : node->args){
-        args.push_back(visit(argExpr.get()));
+        llvm::Value* argValue = visit(argExpr.get());
+        if(!argValue){
+            errorHandler.errorReg("argValue is null in print call.", 0);
+            return nullptr;
+        }
+        // それぞれの型ごとにフォーマット文字列を変更
+        if(argValue->getType()->isIntegerTy(32)) formatStr += "%d";
+        else if(argValue->getType()->isIntegerTy(64)) formatStr += "%lld";
+        else if(argValue->getType()->isDoubleTy() || argValue->getType()->isFloatTy()) formatStr += "%f";
+        // TODO: 文字列等に対応
+        else{
+            errorHandler.errorReg("Unsupported type for print",0);
+            return nullptr;
+        }
+        args.push_back(argValue); // 引数に値を追加
     }
+    formatStr += "\n";
+    llvm::Value* formatStrVal = builder->CreateGlobalStringPtr(formatStr);
+    args.insert(args.begin(), formatStrVal);
     return builder->CreateCall(printfFunc, args, "printfCall");
 }
 llvm::Value* CodeGen::generateInputCall(FunctionCallNode *node){
@@ -219,8 +240,7 @@ llvm::Value* CodeGen::generateInputCall(FunctionCallNode *node){
     }
     // 引数を準備
     std::vector<llvm::Value*> args;
-    llvm::Value* formatStr = builder->CreateGlobalStringPtr("%d");
-    args.push_back(formatStr);
+    std::string formatStr = "";
     if(node->args.size() != 1){
         errorHandler.errorReg("too many arguments to input function.", 0);
         return nullptr;
@@ -235,18 +255,47 @@ llvm::Value* CodeGen::generateInputCall(FunctionCallNode *node){
         errorHandler.errorReg("Unknown variable to input function.", 0);
         return nullptr;
     }
+    auto allocaInst = llvm::dyn_cast<llvm::AllocaInst>(varAddress);
+    llvm::Type* varType = allocaInst->getAllocatedType();
+    if(varType->isIntegerTy(32)) formatStr += "%d";
+    else if(varType->isIntegerTy(64)) formatStr += "%lld";
+    else if(varType->isDoubleTy() || varType->isFloatTy()) formatStr += "%f";
+    // TODO: 文字列等に対応
+    else{
+        errorHandler.errorReg("Unsupported type for input",0);
+        return nullptr;
+    }
+    llvm::Value* formatStrVal = builder->CreateGlobalStringPtr(formatStr);
+    args.push_back(formatStrVal);
     args.push_back(varAddress);
     return builder->CreateCall(scanfFunc, args, "scanfCall");
 }
 
 // varDecl 変数宣言
 llvm::Value* CodeGen::visit(VarDeclNode* node){
-    std::string varName = node->varName; // 変数名
-    auto type = builder->getInt32Ty(); // 型 TODO: 複数型対応
-    auto allocaInst = builder->CreateAlloca(type, nullptr, varName); // メモリ確保
+    std::string varName = node->varName;
+    llvm::Type* varType = nullptr;
+    if(node->type){
+        varType = translateType(node->type->getTypeName());
+    }else if(node->initializer){
+        // TODO: 複数型対応
+        varType = builder->getInt64Ty();
+    }else{
+        // 型注釈も初期化式もないとき
+        errorHandler.errorReg("The variable declaration has neither a type annotation nor an initialization expression.", 1); // 警告を出す
+        varType = builder->getInt64Ty();
+    }
+    if(!varType){
+        // translateTypeがエラーメッセージを出しているはず
+        return nullptr;
+    }
+    auto allocaInst = builder->CreateAlloca(varType, nullptr, varName);
+    // シンボルテーブルに登録
     namedValues[node->varName] = allocaInst;
     if(node->initializer){
         llvm::Value* initVal = visit(node->initializer.get());
+        if(initVal)
+        // TODO: 型チェックとキャスト(int -> i32)
         builder->CreateStore(initVal, allocaInst);
     }
     return 0;
@@ -319,7 +368,13 @@ void CodeGen::visit(ForNode *node){
 // NumberLiteral 数値リテラル
 llvm::Value* CodeGen::visit(NumberLiteralNode *node){
     // int32tyを返す
-    return builder->getInt32(node->value);
+    return builder->getInt64(node->value);
+}
+
+// DecimalLiteral 小数リテラル
+llvm::Value* CodeGen::visit(DecimalLiteralNode *node){
+    // doubleTyを返す
+    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(*context), node->value);
 }
 
 // BinaryOp 二項計算
@@ -331,31 +386,72 @@ llvm::Value* CodeGen::visit(BinaryOpNode *node){
         errorHandler.errorReg("One of the operands in a binary operation is null.", 0);
         return nullptr; 
     }
-    // opを確認
-    if(node->op == "+"){
-        return builder->CreateAdd(lval, rval, "addtmp");
-    }else if(node->op == "-"){
-        return builder->CreateSub(lval, rval, "subtmp");
-    }else if(node->op == "*"){
-        return builder->CreateMul(lval, rval, "multmp");
-    }else if(node->op == "/"){
-        return builder->CreateSDiv(lval, rval, "divtmp");
-    }else if(node->op == "=="){
-        return builder->CreateICmpEQ(lval, rval, "eqtmp");
-    }else if(node->op == "!="){
-        return builder->CreateICmpNE(lval, rval, "neqtmp");
-    }else if(node->op == "<"){
-        return builder->CreateICmpSLT(lval, rval, "lttmp");
-    }else if(node->op == ">"){
-        return builder->CreateICmpSGT(lval, rval, "gttmp");
-    }else if(node->op == "<="){
-        return builder->CreateICmpSLE(lval, rval, "letmp");
-    }else if(node->op == ">="){
-        return builder->CreateICmpSGE(lval, rval, "getmp");
+    if(lval->getType() != rval->getType()){
+        errorHandler.errorReg("Currently type casting is not supported.", 0);
+        return nullptr;
     }
-
-    else{
+    // opを確認
+    if(lval->getType()->isIntegerTy(32) || lval->getType()->isIntegerTy(64)){
+        if(node->op == "+") return builder->CreateAdd(lval, rval, "addtmp");
+        else if(node->op == "-") return builder->CreateSub(lval, rval, "subtmp");
+        else if(node->op == "*") return builder->CreateMul(lval, rval, "multmp");
+        else if(node->op == "/") return builder->CreateSDiv(lval, rval, "divtmp");
+        else if(node->op == "==") return builder->CreateICmpEQ(lval, rval, "eqtmp");
+        else if(node->op == "!=") return builder->CreateICmpNE(lval, rval, "neqtmp");
+        else if(node->op == "<") return builder->CreateICmpSLT(lval, rval, "lttmp");
+        else if(node->op == ">") return builder->CreateICmpSGT(lval, rval, "gttmp");
+        else if(node->op == "<=") return builder->CreateICmpSLE(lval, rval, "letmp");
+        else if(node->op == ">=") return builder->CreateICmpSGE(lval, rval, "getmp");
+        else{
+            errorHandler.errorReg("Unknown operator in integer.", 0);
+            return nullptr;
+        }
+    }else if(lval->getType()->isDoubleTy()){
+        if(node->op == "+") return builder->CreateFAdd(lval, rval, "faddtmp");
+        else if(node->op == "-") return builder->CreateFSub(lval, rval, "fsubtmp");
+        else if(node->op == "*") return builder->CreateFMul(lval, rval, "fmultmp");
+        else if(node->op == "/") return builder->CreateFDiv(lval, rval, "fdivtmp");
+        else if(node->op == "==") return builder->CreateFCmpOEQ(lval, rval, "feqtmp");
+        else if(node->op == "!=") return builder->CreateFCmpONE(lval, rval, "fneqtmp");
+        else if(node->op == "<") return builder->CreateFCmpOLT(lval, rval, "flttmp");
+        else if(node->op == ">") return builder->CreateFCmpOGT(lval, rval, "fgttmp");
+        else if(node->op == "<=") return builder->CreateFCmpOLE(lval, rval, "fletmp");
+        else if(node->op == ">=") return builder->CreateFCmpOGE(lval, rval, "fgetmp");
+        else{
+            errorHandler.errorReg("Unknown operator in decimal.",0);
+            return nullptr;
+        }
+    }else{
         errorHandler.errorReg("Unknown binary operator.", 0);
+        return nullptr;
+    }
+}
+
+// Cast キャスト
+llvm::Value* CodeGen::visit(CastNode *node){
+    llvm::Value* originalValue = visit(node->expression.get());
+    if(!originalValue){
+        errorHandler.errorReg("expression to cast to is empty.", 0);
+        return nullptr;
+    }
+    llvm::Type* originalLlvmType = originalValue->getType(); // キャスト元の型
+    std::shared_ptr<TypeNode> targetTypeNode = node->targetType;
+    if(!targetTypeNode){
+        errorHandler.errorReg("Target type for cast is null.", 0);
+        return nullptr;
+    }
+    llvm::Type* targetLlvmType = translateType(targetTypeNode->getTypeName());
+    if(!targetLlvmType){
+        // translateTypeないでエラーが登録されている
+        return nullptr;
+    }
+    // キャスト処理
+    if(originalLlvmType->isIntegerTy() && targetLlvmType->isIntegerTy()) return builder->CreateIntCast(originalValue, targetLlvmType, true, "intcasttmp");
+    else if(originalLlvmType->isFloatingPointTy() && targetLlvmType->isFloatingPointTy()) return builder->CreateFPCast(originalValue, targetLlvmType, "fpcasttmp");
+    else if(originalLlvmType->isIntegerTy() && targetLlvmType->isFloatingPointTy()) return builder->CreateSIToFP(originalValue, targetLlvmType, "sitofptmp");
+    else if(originalLlvmType->isFloatingPointTy() && targetLlvmType->isIntegerTy()) return builder->CreateFPToSI(originalValue, targetLlvmType, "fptositmp");
+    else{
+        errorHandler.errorReg("Unsupported cast operation.", 0);
         return nullptr;
     }
 }
@@ -363,7 +459,12 @@ llvm::Value* CodeGen::visit(BinaryOpNode *node){
 // VariableRef 変数参照
 llvm::Value* CodeGen::visit(VariableRefNode *node){
     // シンボルテーブルから変数のアドレスを探す
-    llvm::Value* varAddress = namedValues[node->name];
+    auto it = namedValues.find(node->name);
+    if (it == namedValues.end()) {
+        errorHandler.errorReg("Unknown variable name '" + node->name + "'", 0);
+        return nullptr;
+    }
+    llvm::Value* varAddress = it->second;
     // 変数がなかったらエラー
     if(!varAddress){
         errorHandler.errorReg("Unknown variable name '" + node->name + "'", 0);
@@ -371,5 +472,6 @@ llvm::Value* CodeGen::visit(VariableRefNode *node){
     }
     // load命令を生成
     // 値の型, アドレス, IRのレジスタ名(デバッグ用)
-    return builder->CreateLoad(builder->getInt32Ty(), varAddress, node->name.c_str());
+    auto allocaInst = llvm::dyn_cast<llvm::AllocaInst>(varAddress);
+    return builder->CreateLoad(allocaInst->getAllocatedType(), varAddress, node->name.c_str());
 }

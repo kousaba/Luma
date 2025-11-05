@@ -47,3 +47,7 @@ void ErrorHandler::printAllErrors(){
         printError(error);
     }
 }
+
+bool ErrorHandler::hasError() {
+    return errorCount > 0;
+}

@@ -22,7 +22,14 @@ block
     ;
 
 varDecl
-    : (VAR | LET) IDENTIFIER (EQ expr)? SEMI
+    : (VAR | LET) IDENTIFIER typeAnnotation? (EQ expr)? SEMI
+    ;
+typeAnnotation
+    : COLON typeName
+    ;
+typeName
+    : TYPE_INT64 | TYPE_INT32 | TYPE_CHAR
+    | TYPE_FLOAT64 | TYPE_FLOAT32
     ;
 assignmentStatement
     : IDENTIFIER EQ expr SEMI
@@ -49,9 +56,14 @@ forStatement
 // プライマリ式: 式の最小単位(数値リテラルなど)
 primaryExpr
     : INTEGER
+    | DECIMAL
     | functionCallExpr
     | LPAREN expr RPAREN
     | IDENTIFIER
+    ;
+
+castExpr
+    : primaryExpr (AS typeName)* // a as int as floatもok
     ;
 // 関数呼び出し
 functionCallExpr
@@ -63,7 +75,7 @@ argList
     ;
 // 乗算・除算の式
 multiplicativeExpr
-    : primaryExpr ( op+=( MUL | DIV ) primaryExpr )*
+    : castExpr ( op+=( MUL | DIV ) castExpr )*
     ;
 // 加算・減算の式
 additiveExpr

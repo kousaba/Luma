@@ -20,6 +20,7 @@ public:
     void conditionErrorReg(bool cond, std::string name, int errorClass, antlr4::ParserRuleContext *ctx = nullptr);
     void printError(Error error);
     void printAllErrors();
+    bool hasError();
 };
 
 extern ErrorHandler errorHandler;

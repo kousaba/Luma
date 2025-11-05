@@ -72,14 +72,30 @@ antlrcpp::Any AstBuilder::visitReturnStatement(Luma::LumaParser::ReturnStatement
 
 antlrcpp::Any AstBuilder::visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) {
     std::string varName = ctx->IDENTIFIER()->getText();
+    // まずポインタをnullptrで初期化
     std::shared_ptr<ExprNode> init = nullptr;
-    if(ctx->expr()){
+    std::shared_ptr<TypeNode> type = nullptr;
+
+    // 型注釈があれば、BasicTypeNodeを生成
+    if (ctx->typeAnnotation()) {
+        std::string typeNameStr = ctx->typeAnnotation()->typeName()->getText();
+        type = std::make_shared<BasicTypeNode>(typeNameStr);
+    }
+    // 初期化式があれば、visitしてExprNodeを取得
+    if (ctx->expr()) {
         antlrcpp::Any initAny = visit(ctx->expr());
         init = std::any_cast<std::shared_ptr<ExprNode>>(initAny);
     }
-    auto node = std::make_shared<VarDeclNode>(varName, init);
-    antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
-    return result;
+    // 1つのコンストラクタでVarDeclNodeを生成
+    auto node = std::make_shared<VarDeclNode>(varName, type, init);
+    return std::shared_ptr<StatementNode>(node);
+}
+
+antlrcpp::Any AstBuilder::visitTypeAnnotation(Luma::LumaParser::TypeAnnotationContext *ctx){
+    return nullptr;
+}
+antlrcpp::Any AstBuilder::visitTypeName(Luma::LumaParser::TypeNameContext *ctx){
+    return nullptr;
 }
 
 antlrcpp::Any AstBuilder::visitAssignmentStatement(Luma::LumaParser::AssignmentStatementContext *ctx){
@@ -120,6 +136,11 @@ antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext 
         auto node = std::make_shared<NumberLiteralNode>(val);
         antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
         return result;
+    }else if(ctx->DECIMAL()){
+        double val = std::stod(ctx->DECIMAL()->getText());
+        auto node = std::make_shared<DecimalLiteralNode>(val);
+        antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
+        return result;
     }else if(ctx->expr()){
         return visit(ctx->expr());
     }else if(ctx->IDENTIFIER()){
@@ -133,6 +154,20 @@ antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext 
         errorHandler.errorReg("Unknown primary expr.", 0);
         return nullptr;
     }
+}
+
+antlrcpp::Any AstBuilder::visitCastExpr(Luma::LumaParser::CastExprContext *ctx){
+    // primaryExprの値を取得
+    antlrcpp::Any resultAny = visit(ctx->primaryExpr());
+    // as typenameが続く限りループ処理
+    for(size_t i = 0;i < ctx->typeName().size(); i++){
+        std::string typeNameStr = ctx->typeName(i)->getText();
+        auto targetType = std::make_shared<BasicTypeNode>(typeNameStr);
+        auto exprToCast = std::any_cast<std::shared_ptr<ExprNode>>(resultAny);
+        auto castNode = std::make_shared<CastNode>(exprToCast, targetType);
+        resultAny = std::shared_ptr<ExprNode>(castNode);
+    }
+    return resultAny;
 }
 
 antlrcpp::Any AstBuilder::visitFunctionCallExpr(Luma::LumaParser::FunctionCallExprContext *ctx){
@@ -185,7 +220,7 @@ antlrcpp::Any AstBuilder::visitAdditiveExpr(Luma::LumaParser::AdditiveExprContex
 
 antlrcpp::Any AstBuilder::visitMultiplicativeExpr(Luma::LumaParser::MultiplicativeExprContext *ctx) {
     // 1. 最初の左辺を取得
-    antlrcpp::Any lhs_any = visit(ctx->primaryExpr(0));
+    antlrcpp::Any lhs_any = visit(ctx->castExpr(0));
 
     // 2. 演算子の数だけループ (ctx->opはTokenのリストになる)
     for (size_t i = 0; i < ctx->op.size(); ++i) {
@@ -193,7 +228,7 @@ antlrcpp::Any AstBuilder::visitMultiplicativeExpr(Luma::LumaParser::Multiplicati
         std::string op_text = ctx->op[i]->getText();
 
         // 4. 対応する右辺を取得
-        antlrcpp::Any rhs_any = visit(ctx->primaryExpr(i + 1));
+        antlrcpp::Any rhs_any = visit(ctx->castExpr(i + 1));
 
         // キャスト
         auto lhs_expr = std::any_cast<std::shared_ptr<ExprNode>>(lhs_any);

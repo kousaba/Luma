@@ -18,6 +18,8 @@ public:
     antlrcpp::Any visitReturnStatement(Luma::LumaParser::ReturnStatementContext *ctx) override;
     // varDecl
     antlrcpp::Any visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) override;
+    antlrcpp::Any visitTypeAnnotation(Luma::LumaParser::TypeAnnotationContext *ctx) override;
+    antlrcpp::Any visitTypeName(Luma::LumaParser::TypeNameContext *ctx) override;
     // assignment
     antlrcpp::Any visitAssignmentStatement(Luma::LumaParser::AssignmentStatementContext *ctx) override;
     // if
@@ -27,6 +29,7 @@ public:
     
     // expr
     antlrcpp::Any visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx) override;
+    antlrcpp::Any visitCastExpr(Luma::LumaParser::CastExprContext *ctx) override;
     antlrcpp::Any visitFunctionCallExpr(Luma::LumaParser::FunctionCallExprContext *ctx) override;
     antlrcpp::Any visitArgList(Luma::LumaParser::ArgListContext *ctx) override;
     antlrcpp::Any visitAdditiveExpr(Luma::LumaParser::AdditiveExprContext *ctx) override;

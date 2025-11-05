@@ -20,6 +20,8 @@ private:
     std::unique_ptr<llvm::IRBuilder<>> builder;
     // シンボルテーブル(関数名とメモリアドレス(llvm::Value*))を対応付けるmap
     std::map<std::string, llvm::Value*> namedValues;
+    // Lumaの型からLLVMの型に変換する
+    llvm::Type* translateType(std::string typeName);
 public:
     CodeGen();
     // ASTのルートノードを受け取り、コード生成を開始するメインメソッド
@@ -38,9 +40,11 @@ private:
     void visit(IfNode *node);
     void visit(ForNode *node);
     llvm::Value* visit(ExprNode *node);
+    llvm::Value* visit(CastNode *node);
     void visit(ExprStatementNode* node);
     llvm::Value* visit(FunctionCallNode *node);
     llvm::Value* visit(NumberLiteralNode *node);
+    llvm::Value* visit(DecimalLiteralNode *node);
     llvm::Value* visit(BinaryOpNode *node);
     llvm::Value* visit(VariableRefNode *node);
 

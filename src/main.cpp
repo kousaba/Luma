@@ -52,6 +52,15 @@ int main(int argc, char* argv[]){
     if(astRootAny.has_value()){
         try{
             auto progNode = std::any_cast<std::shared_ptr<ProgramNode>>(astRootAny);
+
+            // Semantic Analysis
+            // SemanticAnalysis semanticAnalyzer;
+            // semanticAnalyzer.analyze(progNode.get());
+            // if (errorHandler.hasError()) {
+            //     errorHandler.printAllErrors();
+            //     return 1;
+            // }
+
             CodeGen codeGenerator;
             codeGenerator.generate(progNode.get());
             auto context = std::make_unique<llvm::LLVMContext>();
@@ -83,10 +92,18 @@ int main(int argc, char* argv[]){
                 std::cerr << "Could not find main function: " << toString(mainFuncSym.takeError()) << "\n";
                 return 1;
             }
+            std::error_code EC;
+            llvm::raw_fd_ostream dest("output.ll", EC, llvm::sys::fs::OF_None);
+            if (EC) {
+                llvm::errs() << "Could not open file: " << EC.message();
+                return 1;
+            }
+            module->print(dest, nullptr);
 
             auto* mainFunc = mainFuncSym->toPtr<int()>();
             if(!mainFunc) { return 1; }
             mainFunc();
+            errorHandler.errorReg("Semantic Analysis Finished!", 2);
             errorHandler.errorReg("Compile Finished!", 2);
             errorHandler.printAllErrors();
         }catch (const std::bad_any_cast& e) {
