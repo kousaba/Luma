@@ -17,6 +17,8 @@
 
 
 // AST
+#include "common/ErrorDef.h"
+#include "common/ErrorHandler.h"
 #include "parser/AstBuilder.h"
 #include "ast/Statement.h"
 
@@ -29,16 +31,36 @@
 using namespace antlr4;
 
 int main(int argc, char* argv[]){
-    if(argc != 2){
-        std::cerr << "Usage: ./Luma <source_file>\n";
-        return 1;
-    }
+    // if(argc != 2){
+    //     std::cerr << "Usage: ./Luma <source_file>\n";
+    //     return 1;
+    // }
     
-    std::ifstream file(argv[1]);
-    if(!file){
-        std::cerr << "Could not open file: " << argv[1] << "\n";
+    // std::ifstream file(argv[1]);
+    // if(!file){
+    //     std::cerr << "Could not open file: " << argv[1] << "\n";
+    //     return 1;
+    // }
+    std::string sourceFile;
+    Language lang = Language::EN;
+    for(int i = 1; i < argc; i++){
+        std::string arg = argv[i];
+        if(arg == "-ja") lang = Language::JA;
+        else if(arg == "-en") lang = Language::EN;
+        else if(sourceFile.empty()) sourceFile = arg;
+        else{
+            std::cerr << "Too many source files specified.\n";
+            return 1;
+        }
+    }
+
+    if(sourceFile.empty()){
+        std::cerr << "Usage: ./Luma [-ja|-en] <source_file>\n";
         return 1;
     }
+
+    errorHandler.setLang(lang);
+    std::ifstream file(sourceFile);
     
     ANTLRInputStream inputStream(file);
     Luma::LumaLexer lexer(&inputStream);

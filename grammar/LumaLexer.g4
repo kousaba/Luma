@@ -44,5 +44,7 @@ DECIMAL: [+-]?DIGITS+'.'DIGITS+;
 INTEGER: [+-]?DIGITS+;
 IDENTIFIER: [a-zA-Z][a-zA-Z0-9]*;
 
-// WS
+// WS・コメント
 WS: [ \t\n\r] -> skip;
+// COMMENT : '/*' .*? '*/' -> skip;
+// LINE_COMMENT : '//' ~[\r\n]*? ('\r'? '\n' | EOF) -> skip;

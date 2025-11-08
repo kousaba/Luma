@@ -11,3 +11,4 @@ for c > 40{
     c = c - 1;
     print(b);
 }
+var a;

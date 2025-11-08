@@ -1,6 +1,7 @@
 #include "SemanticAnalysis.h"
 #include "ast/Expression.h"
 #include "ast/Statement.h"
+#include "common/ErrorDef.h"
 #include "common/ErrorHandler.h"
 #include "common/Global.h"
 #include "types/Type.h"
@@ -40,16 +41,16 @@ void SemanticAnalysis::leaveScope(){
     if(!symbolTable.empty()){
         symbolTable.pop_back();
     }else{
-        errorHandler.errorReg("The symbolTable has gone out of scope with no symbol.", 0);
+        errorHandler.compilerErrorReg(CompilerErrorCode::LEAVESCOPE_WITH_EMPTY_SYMBOLTABLE, {});
     }
 }
 bool SemanticAnalysis::addSymbol(std::unique_ptr<Symbol> symbol){
     if(symbolTable.empty()){
-        errorHandler.errorReg("Attempting to add a symbol when no scope exists", 0);
+        errorHandler.compilerErrorReg(CompilerErrorCode::ADDSYMBOL_WITH_NO_SCOPE, {});
         return false;
     }
     if(symbolTable.back().contains(symbol->name)){
-        errorHandler.errorReg("A symbol with the same name already exists in one scope.", 0);
+        errorHandler.errorReg(ErrorCode::ADDSYMBOL_ALREADY_CONTAINS, {});
         return false;
     }
     symbolTable.back()[symbol->name] = std::move(symbol);
@@ -74,7 +75,8 @@ TypeNode* SemanticAnalysis::visit(ExprNode *node){
     if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
     // TODO: 続き
     else{
-        errorHandler.errorReg("SemanticAnalysis::visit(ExprNode *node) failed to find correct type.", -1);
+        // errorHandler.errorReg("SemanticAnalysis::visit(ExprNode *node) failed to find correct type.", -1);
+        errorHandler.compilerErrorReg(CompilerErrorCode::EXPR_VISIT_COULDNOT_CAST, {std::string(typeid(*node).name())});
         return nullptr;
     }
 }
@@ -97,25 +99,25 @@ void SemanticAnalysis::visit(VarDeclNode *node){
             node->type = varType;
         }
     } else {
-        errorHandler.errorReg("Variable declaration for '" + node->varName + "' has no type annotation and no initializer.", 0);
+        errorHandler.errorReg(ErrorCode::VARDECL_NO_TYPE_AND_INIT, {node->varName});
         return;
     }
 
     if (!varType) {
-        errorHandler.errorReg("Could not determine type for variable '" + node->varName + "'.", 0);
+        errorHandler.errorReg(ErrorCode::VARDECL_CANNOT_DETERMINE_TYPE, {node->varName});
         return;
     }
 
     // ステップ2: 決定した型が有効かチェックする
     std::string typeName = varType->getTypeName();
     if (typeName == "void") {
-        errorHandler.errorReg("Cannot declare a variable of type 'void'.", 0);
+        errorHandler.errorReg(ErrorCode::VARDECL_CANNOT_DECLARE_VOID, {node->varName});
         return;
     }
     if (!is_type(typeName)) {
         Symbol* typeSymbol = lookupSymbol(typeName);
         if (!typeSymbol || (typeSymbol->kind != SymbolKind::STRUCT)) {
-            errorHandler.errorReg("Type '" + typeName + "' is not defined.", 0);
+            errorHandler.errorReg(ErrorCode::VARDECL_TYPE_NOT_DEFINED, {typeName, node->varName});
             return;
         }
     }
@@ -131,7 +133,7 @@ void SemanticAnalysis::visit(VarDeclNode *node){
     if (node->type && node->initializer) {
         TypeNode* initializerType = visit(node->initializer.get());
         if (initializerType && initializerType->getTypeName() != node->type->getTypeName()) {
-            errorHandler.errorReg("The initial value type '" + initializerType->getTypeName() + "' is different for variable '" + node->varName + "' with type '" + node->type->getTypeName() + "'.", 0);
+            errorHandler.errorReg(ErrorCode::VARDECL_INIT_TYPE_MISMATCH, {node->varName, node->type->getTypeName(), initializerType->getTypeName()});
         }
     }
 }
@@ -143,7 +145,7 @@ TypeNode* SemanticAnalysis::visit(BinaryOpNode *node){
         return nullptr;
     }
     if(leftType->getTypeName() != rightType->getTypeName()){
-        errorHandler.errorReg("Cannot perform operations on different types", 0);
+        errorHandler.errorReg(ErrorCode::BINARYOP_OPERAND_MISMATCH, {node->op, leftType->getTypeName(), rightType->getTypeName()});
         return nullptr;
     }
     
@@ -172,19 +174,19 @@ TypeNode* SemanticAnalysis::visit(FunctionCallNode *node){
 
     Symbol* funcSymbol = lookupSymbol(node->calleeName);
     if(!funcSymbol){
-        errorHandler.errorReg("Function '" + node->calleeName + "' is not defined.", 0);
+        errorHandler.errorReg(ErrorCode::FUNCCALL_NOT_DEFINED, {node->calleeName});
         return nullptr;
     }
     
     if(funcSymbol->kind != SymbolKind::FUNC){
-        errorHandler.errorReg("'" + node->calleeName + "' is not a function and cannot be called.", 0);
+        errorHandler.errorReg(ErrorCode::FUNCCALL_NOT_FUNC_CALL, {node->calleeName});
         return nullptr;
     }
 
     const auto& expectedArgTypes = funcSymbol->argTypes;
     const auto& actualArgs = node->args;
     if(actualArgs.size() != expectedArgTypes.size()){
-        errorHandler.errorReg("Function '" + node->calleeName + "' expects " + std::to_string(expectedArgTypes.size()) + " arguments, but " + std::to_string(actualArgs.size()) + " were provided.", 0);
+        errorHandler.errorReg(ErrorCode::FUNCCALL_ARG_SIZE_MISMATCH, {node->calleeName, std::to_string(expectedArgTypes.size()), std::to_string(actualArgs.size())});
         return nullptr;
     }
 
@@ -195,9 +197,7 @@ TypeNode* SemanticAnalysis::visit(FunctionCallNode *node){
 
         TypeNode* expectedType = expectedArgTypes[i];
         if(actualType->getTypeName() != expectedType->getTypeName()){
-            errorHandler.errorReg("Argument " + std::to_string(i + 1) + " of function '" + node->calleeName +
-                                    "' has incorrect type. Expected '" + expectedType->getTypeName() +
-                                    "', but got '" + actualType->getTypeName() + "'.", 0);
+            errorHandler.errorReg(ErrorCode::FUNCCALL_ARG_TYPE_MISMATCH, {std::to_string(i + 1), node->calleeName, expectedType->getTypeName(), actualType->getTypeName()});
             return nullptr;
         }
     }
@@ -209,11 +209,11 @@ TypeNode* SemanticAnalysis::visit(FunctionCallNode *node){
 void SemanticAnalysis::visit(AssignmentNode *node){
     Symbol* varSymbol = lookupSymbol(node->varName);
     if(!varSymbol){
-        errorHandler.errorReg("Cannot assign to unknown variable '" + node->varName + "'.",0);
+        errorHandler.errorReg(ErrorCode::ASSIGNMENT_NOT_DEFINED, {node->varName});
         return;
     }
     if(varSymbol->kind != SymbolKind::VAR){
-        errorHandler.errorReg("Cannot be assigned to a symbol '" + node->varName + "' that is not a variable.", 0);
+        errorHandler.errorReg(ErrorCode::ASSIGNMENT_NOT_VARIABLE, {node->varName});
         return;
     }
     TypeNode* varType = varSymbol->type;
@@ -223,7 +223,7 @@ void SemanticAnalysis::visit(AssignmentNode *node){
         return;
     }
     if(varType->getTypeName() != valueType->getTypeName()){
-        errorHandler.errorReg("A " + valueType->getTypeName() + " type value cannot be assigned to an " + varType->getTypeName() + " type variable " + node->varName + ".", 0);
+        errorHandler.errorReg(ErrorCode::ASSIGNMENT_TYPE_MISMATCH, {valueType->getTypeName(), node->varName, varType->getTypeName()});
         return;
     }
     return;
@@ -240,11 +240,11 @@ TypeNode* SemanticAnalysis::visit(DecimalLiteralNode *node){
 TypeNode* SemanticAnalysis::visit(VariableRefNode *node){
     Symbol* varSymbol = lookupSymbol(node->name);
     if(!varSymbol){
-        errorHandler.errorReg("Undeclared variable '" + node->name + "'.", 0);
+        errorHandler.errorReg(ErrorCode::VARREF_NOT_DEFINED, {node->name});
         return nullptr;
     }
     if(varSymbol->kind != SymbolKind::VAR){
-        errorHandler.errorReg("'" + node->name + "' is not a variable.", 0);
+        errorHandler.errorReg(ErrorCode::VARREF_NOT_VARIABLE, {node->name});
         return nullptr;
     }
     node->type = varSymbol->type->shared_from_this();
@@ -257,17 +257,17 @@ TypeNode* SemanticAnalysis::visit(CastNode *node){
         return nullptr;
     }
     if(!node->type){
-        errorHandler.errorReg("node->type was nullptr in SemanticAnalysis::visit(CastNode *node)", -1);
+        errorHandler.compilerErrorReg(CompilerErrorCode::CAST_NODE_TYPE_NULL, {});
         return nullptr;
     }
     TypeNode* type = node->type.get();
     std::string typeName;
     if(auto cnode = dynamic_cast<BasicTypeNode*>(type)) typeName = cnode->getTypeName();
     else{
-        errorHandler.errorReg("Non-basic types cannot be cast.", 0);
+        errorHandler.errorReg(ErrorCode::CAST_TO_NON_BASIC, {});
     }
     if(!is_type(typeName)){
-        errorHandler.errorReg("Type is not valid when using CastNode.", 0);
+        errorHandler.errorReg(ErrorCode::CAST_INVALID_TYPE, {});
         return nullptr;
     }
     // TODO: 有効なキャストか確かめる処理
@@ -291,7 +291,7 @@ void SemanticAnalysis::visit(BlockNode *node){
 void SemanticAnalysis::visit(IfNode *node){
     TypeNode* condType = visit(node->condition.get());
     if(condType->getTypeName() != "bool"){
-        errorHandler.errorReg("The condition expression in if statement cannot contain any type other than bool. Please cast it.", 0);
+        errorHandler.errorReg(ErrorCode::IF_NOT_BOOL, {condType->getTypeName()});
         return;
     }
     visit(node->if_block.get());
@@ -302,7 +302,7 @@ void SemanticAnalysis::visit(IfNode *node){
 void SemanticAnalysis::visit(ForNode *node){
     TypeNode* condType = visit(node->condition.get());
     if(condType->getTypeName() != "bool"){
-        errorHandler.errorReg("The condition expression in for statement cannot contain any type other than bool. Please cast it.", 0);
+        errorHandler.errorReg(ErrorCode::FOR_NOT_BOOL, {condType->getTypeName()});
         return;
     }
     visit(node->block.get());
@@ -314,7 +314,7 @@ void SemanticAnalysis::visit(ExprStatementNode *node){
     if(node->expression){
         visit(node->expression.get());
     }else{
-        errorHandler.errorReg("There is no expression in the expression statement.", 1);
+        errorHandler.warnReg(WarnCode::EXPR_STMT_NO_EXPR, {});
     }
 }
 
@@ -327,6 +327,6 @@ void SemanticAnalysis::visit(StatementNode *node){
     if(auto cnode = dynamic_cast<AssignmentNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<ExprStatementNode*>(node)) return visit(cnode);
     else{
-        errorHandler.errorReg("SemanticAnalysis::visit(ExprNode *node) failed to find correct type for node type: " + std::string(typeid(*node).name()), -1);
+        errorHandler.compilerErrorReg(CompilerErrorCode::STMT_VISIT_COULDNOT_CAST, {std::string(typeid(*node).name())});
     }
 }
