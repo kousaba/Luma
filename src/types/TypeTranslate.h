@@ -1,4 +1,9 @@
+#pragma once
+#include "types/Type.h"
 #include <llvm/IR/Type.h>
-#include <string>
+#include <llvm/IR/LLVMContext.h>
 
-llvm::Type* typeTranslate(std::string typeName);
+class TypeTranslate{
+public:
+    static llvm::Type* toLlvmType(TypeNode* type, llvm::LLVMContext& context);
+};

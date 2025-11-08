@@ -4,7 +4,7 @@
 #include <vector>
 
 // すべての型の基底クラス
-class TypeNode{
+class TypeNode : public std::enable_shared_from_this<TypeNode> {
 public:
     virtual ~TypeNode() = default;
     virtual std::string getTypeName() const = 0;
@@ -20,5 +20,5 @@ public:
     BasicTypeNode(const std::string& n) : name(n){};
     std::string getTypeName() const override {return name;}
     bool isInteger() const override { return name == "int" || name == "int32" || name == "i32"; }
-    bool isFloat() const override { return name == "float" || name == "float32"; }
+    bool isFloat() const override { return name == "float" || name == "f32"; }
 };

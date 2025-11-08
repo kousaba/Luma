@@ -1,61 +1,64 @@
-#ifndef LUMA_SEMANTIC_ANALYSIS_H
-#define LUMA_SEMANTIC_ANALYSIS_H
-
+#pragma once
+#include "ast/Expression.h"
+#include "ast/Statement.h"
+#include "types/Type.h"
+#include <llvm/IR/Value.h>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <map>
-#include <memory>
-#include "../ast/AstNode.h"
-#include "../ast/Expression.h"
-#include "../ast/Statement.h"
-#include "../ast/Definition.h"
-#include "../common/ErrorHandler.h"
-#include "../types/Type.h" // Assuming Type.h defines TypeNode and its subclasses
 
-// Forward declarations for AST nodes
-class ProgramNode;
-class BlockNode;
-class FunctionDefNode;
-class VarDeclNode;
-class VariableRefNode;
-class BinaryOpNode;
-class NumberLiteralNode;
-class ExprStatementNode;
-class AssignmentNode;
-class IfNode;
-class ForNode;
-class FunctionCallNode;
-
-class SemanticAnalysis {
-public:
-    SemanticAnalysis();
-    void analyze(ProgramNode* root);
-
-    // Scope management
-    void enterScope();
-    void leaveScope();
-    void addSymbol(const std::string& name, std::shared_ptr<TypeNode> type);
-    std::shared_ptr<TypeNode> findSymbol(const std::string& name);
-
-    // Visit methods for AST nodes
-    void visit(ProgramNode* node);
-    void visit(StatementNode* node); // Generic statement visitor
-    void visit(BlockNode* node);
-    void visit(FunctionDefNode* node);
-    std::shared_ptr<TypeNode> visit(ExprNode* node); // Generic expression visitor
-    std::shared_ptr<TypeNode> visit(VarDeclNode* node);
-    std::shared_ptr<TypeNode> visit(VariableRefNode* node);
-    std::shared_ptr<TypeNode> visit(BinaryOpNode* node);
-    std::shared_ptr<TypeNode> visit(NumberLiteralNode* node);
-    void visit(ExprStatementNode* node);
-    void visit(AssignmentNode* node);
-    void visit(IfNode* node);
-    void visit(ForNode* node);
-    std::shared_ptr<TypeNode> visit(FunctionCallNode* node);
-
-private:
-    std::vector<std::map<std::string, std::shared_ptr<TypeNode>>> scopes;
-    ErrorHandler errorHandler;
+enum class SymbolKind{
+    VAR,
+    FUNC,
+    STRUCT
 };
 
-#endif // LUMA_SEMANTIC_ANALYSIS_H
+struct Symbol{
+    SymbolKind kind;
+    std::string name;
+    TypeNode* type;
+    llvm::Value* llvmValue = nullptr;
+    std::vector<TypeNode*> argTypes;
+    
+    Symbol(const std::string& name, TypeNode* type) : kind(SymbolKind::VAR), name(name), type(type) {} // 変数用
+    Symbol(const std::string& name, TypeNode* returnType, const std::vector<TypeNode*>& args) : kind(SymbolKind::FUNC), name(name), type(returnType), argTypes(args){}// 関数用
+    Symbol() = delete;
+};
+
+class SemanticAnalysis{
+private:
+    std::vector<std::map<std::string, std::unique_ptr<Symbol>>> symbolTable;
+    void enterScope();
+    void leaveScope();
+    bool addSymbol(std::unique_ptr<Symbol> symbol);
+    // 基本型
+    std::unordered_map<std::string, std::shared_ptr<TypeNode>> typePtr;
+    bool is_type(std::string typeName);
+public: // ★ここから public にする
+    // コンストラクタ
+    SemanticAnalysis();
+    // main用
+    // エラーがあるか
+    bool hasErrors();
+    Symbol* lookupSymbol(const std::string& name); // ★ここへ移動
+    // visit処理
+    TypeNode* visit(BinaryOpNode *node);
+    TypeNode* visit(FunctionCallNode *node);
+    void visit(AssignmentNode *node);
+    TypeNode* visit(NumberLiteralNode *node);
+    TypeNode* visit(DecimalLiteralNode *node);
+    TypeNode* visit(VariableRefNode *node);
+    TypeNode* visit(CastNode *node);
+    void visit(VarDeclNode *node);
+    TypeNode* visit(ExprNode *node); // 振り分け用
+    // 式以外
+    void visit(ProgramNode *node); // 各要素をvisit
+    void visit(BlockNode *node); // enterScope() -> visit -> leaveScope()
+    void visit(IfNode *node); // conditionをvisit -> boolか確認 -> thenとelseをvisit(blockなのでvisit(if_block)のみでいい)
+    void visit(ForNode *node); // Ifと同じ
+    void visit(ReturnNode *node); // fnの戻り値と型が同じか調べる
+    void visit(ExprStatementNode *node); // 中身のexprを呼び出すだけ
+    void visit(StatementNode *node); // 振り分け用
+};

@@ -15,6 +15,8 @@ void ErrorHandler::errorReg(std::string name, int error_class, antlr4::ParserRul
         warnCount++;
     }else if(error_class == 2){
         infoCount++;
+    }else if(error_class == -1){
+        // コンパイラエラーのときの処理
     }else{
         errorReg("Unknown Error Happend in errorReg.", 0, ctx);
     }
@@ -35,6 +37,7 @@ void ErrorHandler::printError(Error error){
     if(error.errorClass == 0) std::cout << "[Error]: ";
     else if(error.errorClass == 1) std::cout << "[Warn]: ";
     else if(error.errorClass == 2) std::cout << "[Info]: ";
+    else if(error.errorClass == -1) std::cout << "[Compiler Error]: ";
     else{
         std::cout << "[Unknown Error]: \n\t";
     }

@@ -1,225 +1,332 @@
 #include "SemanticAnalysis.h"
-#include <iostream>
+#include "ast/Expression.h"
+#include "ast/Statement.h"
+#include "common/ErrorHandler.h"
+#include "common/Global.h"
+#include "types/Type.h"
+#include <memory>
+#include <string>
 
-SemanticAnalysis::SemanticAnalysis() {
-    // Global scope
-    enterScope();
+
+// コンストラクタ
+SemanticAnalysis::SemanticAnalysis(){
+    // 基本型のポインタを持つ
+    typePtr["int"] = std::make_shared<BasicTypeNode>("int");
+    typePtr["float"] = std::make_shared<BasicTypeNode>("float");
+    typePtr["i32"] = std::make_shared<BasicTypeNode>("i32");
+    typePtr["f32"] = std::make_shared<BasicTypeNode>("f32");
+    typePtr["char"] = std::make_shared<BasicTypeNode>("char");
+    typePtr["bool"] = std::make_shared<BasicTypeNode>("bool");
+    typePtr["void"] = std::make_shared<BasicTypeNode>("void");
 }
 
-void SemanticAnalysis::analyze(ProgramNode* root) {
-    visit(root);
+// 有効な型か判別するヘルパー関数
+bool SemanticAnalysis::is_type(std::string typeName){
+    bool isBasicType = (typeName == "int" || typeName == "i32" || typeName == "void" || typeName == "float" || 
+                        typeName == "f32" || typeName == "char");
+    return isBasicType;
 }
 
-void SemanticAnalysis::enterScope() {
-    scopes.emplace_back();
+// main用
+// エラーがあるか
+bool SemanticAnalysis::hasErrors(){
+    return errorHandler.hasError();
 }
 
-void SemanticAnalysis::leaveScope() {
-    if (!scopes.empty()) {
-        scopes.pop_back();
+void SemanticAnalysis::enterScope(){
+    symbolTable.push_back(std::map<std::string, std::unique_ptr<Symbol>>());
+}
+void SemanticAnalysis::leaveScope(){
+    if(!symbolTable.empty()){
+        symbolTable.pop_back();
+    }else{
+        errorHandler.errorReg("The symbolTable has gone out of scope with no symbol.", 0);
     }
 }
-
-void SemanticAnalysis::addSymbol(const std::string& name, std::shared_ptr<TypeNode> type) {
-    if (scopes.empty()) {
-        errorHandler.errorReg("Cannot add symbol to empty scope stack.", 0);
-        return;
+bool SemanticAnalysis::addSymbol(std::unique_ptr<Symbol> symbol){
+    if(symbolTable.empty()){
+        errorHandler.errorReg("Attempting to add a symbol when no scope exists", 0);
+        return false;
     }
-    // Check for duplicate in current scope
-    if (scopes.back().count(name)) {
-        errorHandler.errorReg("Redeclaration of variable '" + name + "' in the same scope.", 0);
-        return;
+    if(symbolTable.back().contains(symbol->name)){
+        errorHandler.errorReg("A symbol with the same name already exists in one scope.", 0);
+        return false;
     }
-    scopes.back()[name] = type;
+    symbolTable.back()[symbol->name] = std::move(symbol);
+    return true;
 }
-
-std::shared_ptr<TypeNode> SemanticAnalysis::findSymbol(const std::string& name) {
-    for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
-        if (it->count(name)) {
-            return it->at(name);
+Symbol* SemanticAnalysis::lookupSymbol(const std::string& name){
+    for(auto it = symbolTable.rbegin(); it != symbolTable.rend(); ++it){
+        auto symbolIt = it->find(name);
+        if(symbolIt != it->end()){
+            return symbolIt->second.get();
         }
     }
-    return nullptr; // Not found
+    return nullptr; // 見つからなかった
 }
 
-void SemanticAnalysis::visit(ProgramNode* node) {
-    for (const auto& stmt : node->statements) {
-        visit(stmt.get());
+TypeNode* SemanticAnalysis::visit(ExprNode *node){
+    if(auto cnode = dynamic_cast<BinaryOpNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<FunctionCallNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<NumberLiteralNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<DecimalLiteralNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<CastNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
+    // TODO: 続き
+    else{
+        errorHandler.errorReg("SemanticAnalysis::visit(ExprNode *node) failed to find correct type.", -1);
+        return nullptr;
     }
 }
 
-void SemanticAnalysis::visit(StatementNode* node) {
-    // This is a generic visitor for statements. Specific statement types will override this.
-    // For now, we'll dynamic_cast to known statement types.
-    if (auto varDecl = dynamic_cast<VarDeclNode*>(node)) {
-        visit(varDecl);
-    } else if (auto funcDef = dynamic_cast<FunctionDefNode*>(node)) {
-        visit(funcDef);
-    } else if (auto exprStmt = dynamic_cast<ExprStatementNode*>(node)) {
-        visit(exprStmt);
-    } else if (auto assignment = dynamic_cast<AssignmentNode*>(node)) {
-        visit(assignment);
-    } else if (auto ifNode = dynamic_cast<IfNode*>(node)) {
-        visit(ifNode);
-    } else if (auto forNode = dynamic_cast<ForNode*>(node)) {
-        visit(forNode);
-    } else {
-        // Handle unknown statement type or add more specific visitors
-    }
-}
+void SemanticAnalysis::visit(VarDeclNode *node){
+    std::shared_ptr<TypeNode> varType = nullptr;
+    TypeNode* inferredTypeRaw = nullptr;
 
-void SemanticAnalysis::visit(BlockNode* node) {
-    enterScope();
-    for (const auto& stmt : node->statements) {
-        visit(stmt.get());
-    }
-    leaveScope();
-}
-
-void SemanticAnalysis::visit(FunctionDefNode* node) {
-    // TODO: Handle function parameters and return types
-    enterScope();
-    // Add parameters to the function's scope
-    for (const auto& paramName : node->parameters) {
-        // For now, assume all parameters are int32. This needs to be improved.
-        addSymbol(paramName, std::make_shared<BasicTypeNode>("int32"));
-    }
-    visit(node->body.get());
-    leaveScope();
-}
-
-std::shared_ptr<TypeNode> SemanticAnalysis::visit(VarDeclNode* node) {
-    std::shared_ptr<TypeNode> resolvedType = nullptr;
-
-    // 1. Determine type
+    // ステップ1: 変数の型を決定する
     if (node->type) {
-        // Type annotation exists
-        resolvedType = node->type;
+        // 型注釈がある場合
+        varType = node->type;
     } else if (node->initializer) {
-        // Infer type from initializer
-        resolvedType = visit(node->initializer.get());
-        if (!resolvedType) {
-            errorHandler.errorReg("Could not infer type for variable '" + node->varName + "' from initializer.", 0);
+        // 型注釈がなく、初期化式がある場合 -> 型推論
+        inferredTypeRaw = visit(node->initializer.get());
+        if (inferredTypeRaw) {
+            // 推論された型 (TypeNode*) から shared_ptr を安全に作成し、
+            // varType と node->type の両方に設定する
+            varType = inferredTypeRaw->shared_from_this();
+            node->type = varType;
+        }
+    } else {
+        errorHandler.errorReg("Variable declaration for '" + node->varName + "' has no type annotation and no initializer.", 0);
+        return;
+    }
+
+    if (!varType) {
+        errorHandler.errorReg("Could not determine type for variable '" + node->varName + "'.", 0);
+        return;
+    }
+
+    // ステップ2: 決定した型が有効かチェックする
+    std::string typeName = varType->getTypeName();
+    if (typeName == "void") {
+        errorHandler.errorReg("Cannot declare a variable of type 'void'.", 0);
+        return;
+    }
+    if (!is_type(typeName)) {
+        Symbol* typeSymbol = lookupSymbol(typeName);
+        if (!typeSymbol || (typeSymbol->kind != SymbolKind::STRUCT)) {
+            errorHandler.errorReg("Type '" + typeName + "' is not defined.", 0);
+            return;
+        }
+    }
+
+    // ステップ3: シンボルテーブルに登録する
+    auto newSymbol = std::make_unique<Symbol>(node->varName, varType.get());
+    if (!addSymbol(std::move(newSymbol))) {
+        // addSymbol内で二重定義エラーが出力される
+        return;
+    }
+
+    // ステップ4: 型注釈と初期化式の型が一致するかチェックする
+    if (node->type && node->initializer) {
+        TypeNode* initializerType = visit(node->initializer.get());
+        if (initializerType && initializerType->getTypeName() != node->type->getTypeName()) {
+            errorHandler.errorReg("The initial value type '" + initializerType->getTypeName() + "' is different for variable '" + node->varName + "' with type '" + node->type->getTypeName() + "'.", 0);
+        }
+    }
+}
+
+TypeNode* SemanticAnalysis::visit(BinaryOpNode *node){
+    TypeNode* leftType = visit(node->left.get());
+    TypeNode* rightType = visit(node->right.get());
+    if(!leftType || !rightType){
+        return nullptr;
+    }
+    if(leftType->getTypeName() != rightType->getTypeName()){
+        errorHandler.errorReg("Cannot perform operations on different types", 0);
+        return nullptr;
+    }
+    
+    // 比較演算子はboolを返す
+    if(node->op == "==" || node->op == "!=" || node->op == "<" || node->op == ">" || node->op == "<=" || node->op == ">="){
+        node->type = typePtr["bool"]->shared_from_this();
+        return typePtr["bool"].get();
+    }
+
+    node->type = leftType->shared_from_this();
+    return leftType;
+}
+
+TypeNode* SemanticAnalysis::visit(FunctionCallNode *node){
+    // 引数の各式を先にvisitして、型情報をASTに付与する
+    for(const auto& arg : node->args){
+        visit(arg.get());
+    }
+
+    // 組み込み関数の特別扱い
+    if(node->calleeName == "print" || node->calleeName == "input"){
+        // printとinputは文として扱われ、値を持たない
+        node->type = typePtr["void"]->shared_from_this();
+        return typePtr["void"].get();
+    }
+
+    Symbol* funcSymbol = lookupSymbol(node->calleeName);
+    if(!funcSymbol){
+        errorHandler.errorReg("Function '" + node->calleeName + "' is not defined.", 0);
+        return nullptr;
+    }
+    
+    if(funcSymbol->kind != SymbolKind::FUNC){
+        errorHandler.errorReg("'" + node->calleeName + "' is not a function and cannot be called.", 0);
+        return nullptr;
+    }
+
+    const auto& expectedArgTypes = funcSymbol->argTypes;
+    const auto& actualArgs = node->args;
+    if(actualArgs.size() != expectedArgTypes.size()){
+        errorHandler.errorReg("Function '" + node->calleeName + "' expects " + std::to_string(expectedArgTypes.size()) + " arguments, but " + std::to_string(actualArgs.size()) + " were provided.", 0);
+        return nullptr;
+    }
+
+    for(size_t i = 0; i < actualArgs.size(); i++){
+        // 上でvisit済みなので、型を取得するだけ
+        TypeNode* actualType = actualArgs[i]->type.get();
+        if(!actualType) return nullptr; // 引数の式の中でエラー
+
+        TypeNode* expectedType = expectedArgTypes[i];
+        if(actualType->getTypeName() != expectedType->getTypeName()){
+            errorHandler.errorReg("Argument " + std::to_string(i + 1) + " of function '" + node->calleeName +
+                                    "' has incorrect type. Expected '" + expectedType->getTypeName() +
+                                    "', but got '" + actualType->getTypeName() + "'.", 0);
             return nullptr;
         }
-    } else {
-        // Default to int64 if no type annotation and no initializer
-        resolvedType = std::make_shared<BasicTypeNode>("int64");
-        errorHandler.errorReg("Variable '" + node->varName + "' declared without type or initializer; defaulting to int64.", 1); // Warning
     }
 
-    // 2. Check for duplicate in current scope
-    if (scopes.empty()) {
-        errorHandler.errorReg("Internal error: Scope stack is empty during variable declaration.", 0);
+    node->type = funcSymbol->type->shared_from_this();
+    return funcSymbol->type;
+}
+
+void SemanticAnalysis::visit(AssignmentNode *node){
+    Symbol* varSymbol = lookupSymbol(node->varName);
+    if(!varSymbol){
+        errorHandler.errorReg("Cannot assign to unknown variable '" + node->varName + "'.",0);
+        return;
+    }
+    if(varSymbol->kind != SymbolKind::VAR){
+        errorHandler.errorReg("Cannot be assigned to a symbol '" + node->varName + "' that is not a variable.", 0);
+        return;
+    }
+    TypeNode* varType = varSymbol->type;
+    TypeNode* valueType = visit(node->value.get());
+    if(!valueType){
+        // visitしたときにエラーメッセージが出ているはず
+        return;
+    }
+    if(varType->getTypeName() != valueType->getTypeName()){
+        errorHandler.errorReg("A " + valueType->getTypeName() + " type value cannot be assigned to an " + varType->getTypeName() + " type variable " + node->varName + ".", 0);
+        return;
+    }
+    return;
+}
+
+TypeNode* SemanticAnalysis::visit(NumberLiteralNode *node){
+    node->type = typePtr["int"]->shared_from_this();
+    return typePtr["int"].get();
+}
+TypeNode* SemanticAnalysis::visit(DecimalLiteralNode *node){
+    node->type = typePtr["float"]->shared_from_this();
+    return typePtr["float"].get();
+}
+TypeNode* SemanticAnalysis::visit(VariableRefNode *node){
+    Symbol* varSymbol = lookupSymbol(node->name);
+    if(!varSymbol){
+        errorHandler.errorReg("Undeclared variable '" + node->name + "'.", 0);
         return nullptr;
     }
-    if (scopes.back().count(node->varName)) {
-        errorHandler.errorReg("Redeclaration of variable '" + node->varName + "' in the same scope.", 0);
+    if(varSymbol->kind != SymbolKind::VAR){
+        errorHandler.errorReg("'" + node->name + "' is not a variable.", 0);
         return nullptr;
     }
-
-    // 3. Register in symbol table
-    addSymbol(node->varName, resolvedType);
-
-    // 4. Write to AST
-    node->type = resolvedType;
-    return resolvedType;
+    node->type = varSymbol->type->shared_from_this();
+    return varSymbol->type;
 }
-
-std::shared_ptr<TypeNode> SemanticAnalysis::visit(VariableRefNode* node) {
-    std::shared_ptr<TypeNode> foundType = findSymbol(node->name);
-    if (!foundType) {
-        errorHandler.errorReg("Undefined variable '" + node->name + "'.", 0);
-        // Return a special error type or nullptr
-        return nullptr; 
-    }
-    // Write to AST
-    node->type = foundType;
-    return foundType;
-}
-
-std::shared_ptr<TypeNode> SemanticAnalysis::visit(BinaryOpNode* node) {
-    std::shared_ptr<TypeNode> leftType = visit(node->left.get());
-    std::shared_ptr<TypeNode> rightType = visit(node->right.get());
-
-    if (!leftType || !rightType) {
-        // Error already reported by sub-expressions
+TypeNode* SemanticAnalysis::visit(CastNode *node){
+    TypeNode* exprType = visit(node->expression.get());
+    if(!exprType){
+        // visitするときにエラーが出ているはず
         return nullptr;
     }
-
-    // Type checking rules
-    // For simplicity, let's assume arithmetic operations for now
-    if (leftType->isInteger() && rightType->isInteger()) {
-        // Result is integer
-        node->type = std::make_shared<BasicTypeNode>("int32"); // Assuming int32 for now
-        return node->type;
-    } else if (leftType->isNumeric() && rightType->isNumeric()) {
-        // If either is float, result is float
-        node->type = std::make_shared<BasicTypeNode>("float32"); // Assuming float32 for now
-        return node->type;
-    } else {
-        errorHandler.errorReg("Type mismatch in binary operation for operator '" + node->op + "'.", 0);
+    if(!node->type){
+        errorHandler.errorReg("node->type was nullptr in SemanticAnalysis::visit(CastNode *node)", -1);
         return nullptr;
     }
-}
-
-std::shared_ptr<TypeNode> SemanticAnalysis::visit(NumberLiteralNode* node) {
-    // For simplicity, assume all number literals are int32 for now
-    // In a real compiler, you'd differentiate based on value or suffix (e.g., 1.0f)
-    node->type = std::make_shared<BasicTypeNode>("int32");
-    return node->type;
-}
-
-std::shared_ptr<TypeNode> SemanticAnalysis::visit(ExprNode* node) {
-    // Generic expression visitor, needs to be dynamic_cast to specific types
-    if (auto numLit = dynamic_cast<NumberLiteralNode*>(node)) {
-        return visit(numLit);
-    } else if (auto binOp = dynamic_cast<BinaryOpNode*>(node)) {
-        return visit(binOp);
-    } else if (auto varRef = dynamic_cast<VariableRefNode*>(node)) {
-        return visit(varRef);
-    } else if (auto funcCall = dynamic_cast<FunctionCallNode*>(node)) {
-        return visit(funcCall);
+    TypeNode* type = node->type.get();
+    std::string typeName;
+    if(auto cnode = dynamic_cast<BasicTypeNode*>(type)) typeName = cnode->getTypeName();
+    else{
+        errorHandler.errorReg("Non-basic types cannot be cast.", 0);
     }
-    errorHandler.errorReg("Unknown expression type encountered during semantic analysis.", 0);
-    return nullptr;
+    if(!is_type(typeName)){
+        errorHandler.errorReg("Type is not valid when using CastNode.", 0);
+        return nullptr;
+    }
+    // TODO: 有効なキャストか確かめる処理
+    return node->type.get();
 }
 
-void SemanticAnalysis::visit(ExprStatementNode* node) {
-    visit(node->expression.get());
+// 式以外
+void SemanticAnalysis::visit(ProgramNode *node){
+    enterScope();
+    for(auto stmt : node->statements){
+        visit(stmt.get());
+    }
 }
-
-void SemanticAnalysis::visit(AssignmentNode* node) {
-    // TODO: Implement type checking for assignment
-    visit(node->value.get());
+void SemanticAnalysis::visit(BlockNode *node){
+    enterScope();
+    for(auto stmt : node->statements){
+        visit(stmt.get());
+    }
+    leaveScope();
 }
-
-void SemanticAnalysis::visit(IfNode* node) {
-    // TODO: Implement type checking for if condition and blocks
-    visit(node->condition.get());
+void SemanticAnalysis::visit(IfNode *node){
+    TypeNode* condType = visit(node->condition.get());
+    if(condType->getTypeName() != "bool"){
+        errorHandler.errorReg("The condition expression in if statement cannot contain any type other than bool. Please cast it.", 0);
+        return;
+    }
     visit(node->if_block.get());
-    if (node->else_block) {
+    if(node->else_block){
         visit(node->else_block.get());
     }
 }
-
-void SemanticAnalysis::visit(ForNode* node) {
-    // TODO: Implement type checking for for loop components
-    visit(node->condition.get());
+void SemanticAnalysis::visit(ForNode *node){
+    TypeNode* condType = visit(node->condition.get());
+    if(condType->getTypeName() != "bool"){
+        errorHandler.errorReg("The condition expression in for statement cannot contain any type other than bool. Please cast it.", 0);
+        return;
+    }
     visit(node->block.get());
 }
+void SemanticAnalysis::visit(ReturnNode *node){
+    // TODO: fnの戻り値と型が同じか調べる
+}
+void SemanticAnalysis::visit(ExprStatementNode *node){
+    if(node->expression){
+        visit(node->expression.get());
+    }else{
+        errorHandler.errorReg("There is no expression in the expression statement.", 1);
+    }
+}
 
-std::shared_ptr<TypeNode> SemanticAnalysis::visit(FunctionCallNode* node) {
-    // TODO: Implement type checking for function calls
-    for (const auto& arg : node->args) {
-        visit(arg.get());
+void SemanticAnalysis::visit(StatementNode *node){
+    if(auto cnode = dynamic_cast<BlockNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<IfNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<ForNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<ReturnNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<VarDeclNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<AssignmentNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<ExprStatementNode*>(node)) return visit(cnode);
+    else{
+        errorHandler.errorReg("SemanticAnalysis::visit(ExprNode *node) failed to find correct type for node type: " + std::string(typeid(*node).name()), -1);
     }
-    // For now, assume print returns void and input returns int32
-    if (node->calleeName == "print") {
-        return nullptr; // Representing void
-    } else if (node->calleeName == "input") {
-        return std::make_shared<BasicTypeNode>("int32");
-    }
-    errorHandler.errorReg("Unknown function call '" + node->calleeName + "' during semantic analysis.", 0);
-    return nullptr;
 }

@@ -6,20 +6,21 @@
 #include "../../src/types/Type.h" // Include Type.h
 
 // 式の基底クラス
-class ExprNode : public AstNode{};
+class ExprNode : public AstNode{
+public:
+    std::shared_ptr<TypeNode> type = nullptr;
+};
 
 // 数値リテラルを表すノード
 class NumberLiteralNode : public ExprNode{
 public:
     int value;
-    std::shared_ptr<TypeNode> type;
     NumberLiteralNode(int val) : value(val){}
 };
 // 小数リテラルを表すノード
 class DecimalLiteralNode : public ExprNode{
 public:
     double value;
-    std::shared_ptr<TypeNode> type;
     DecimalLiteralNode(double val) : value(val){}
 };
 
@@ -27,7 +28,6 @@ public:
 class VariableRefNode : public ExprNode{
 public:
     std::string name;
-    std::shared_ptr<TypeNode> type;
     VariableRefNode(const std::string& varName) : name(varName) {}
 };
 
@@ -37,7 +37,6 @@ public:
     std::string op;
     std::shared_ptr<ExprNode> left;
     std::shared_ptr<ExprNode> right;
-    std::shared_ptr<TypeNode> type;
     BinaryOpNode(const std::string& op, std::shared_ptr<ExprNode> lhs, std::shared_ptr<ExprNode> rhs) : op(op), left(lhs), right(rhs) {}
 };
 
@@ -53,6 +52,5 @@ public:
 class CastNode : public ExprNode{
 public:
     std::shared_ptr<ExprNode> expression;
-    std::shared_ptr<TypeNode> targetType;
-    CastNode(std::shared_ptr<ExprNode> expr, std::shared_ptr<TypeNode> type) : expression(expr), targetType(type){}
+    CastNode(std::shared_ptr<ExprNode> expr, std::shared_ptr<TypeNode> type) : expression(expr) {this->type = type;}
 };

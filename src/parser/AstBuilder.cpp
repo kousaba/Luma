@@ -1,4 +1,3 @@
-#pragma once
 #include "AstBuilder.h"
 #include "LumaLexer.h"
 #include "LumaParser.h"

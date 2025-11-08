@@ -1,6 +1,6 @@
 #include <cassert>
 #include <iostream>
-#include <llvm-18/llvm/IR/Constants.h>
+#include <llvm/IR/Constants.h>
 #include <memory>
 #include "CodeGen.h"
 #include "../ast/Expression.h"
@@ -13,12 +13,11 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/BasicBlock.h"
 #include "common/Global.h"
+#include "semantic/SemanticAnalysis.h"
+#include "types/TypeTranslate.h"
 
-CodeGen::CodeGen(){
-    context = std::make_unique<llvm::LLVMContext>();
-    module = std::make_unique<llvm::Module>("LumaModule", *context);
-    builder = std::make_unique<llvm::IRBuilder<>>(*context);
-}
+CodeGen::CodeGen(SemanticAnalysis& sema) : context(std::make_unique<llvm::LLVMContext>()), module(std::make_unique<llvm::Module>("LumaModule", *context)),
+                    builder(std::make_unique<llvm::IRBuilder<>>(*context)), semanticAnalysis(sema){}
 
 void CodeGen::generate(ProgramNode* root){
     visit(root);
@@ -50,15 +49,10 @@ void CodeGen::visit(ProgramNode* node){
     // エントリーブロック作成
     llvm::BasicBlock* entryBlock = llvm::BasicBlock::Create(*context, "entry", mainFunc);
     builder->SetInsertPoint(entryBlock);
-    // main関数スコープのためのシンボルテーブル
-    auto originalNamedValues = namedValues;
-    namedValues.clear();
     // 各文をvisit
     for(auto& stmt : node->statements) visit(stmt.get());
     // 最後にreturn 0;を追加
     builder->CreateRet(builder->getInt32(0));
-    // もとに戻す
-    namedValues = originalNamedValues;
 }
 
 // Statement
@@ -108,9 +102,7 @@ void CodeGen::visit(FunctionDefNode *node){
 
     auto entryBlock = llvm::BasicBlock::Create(*context, "entry", func);
     builder->SetInsertPoint(entryBlock);
-    // 新しいスコープのためのシンボルテーブルを用意
-    std::map<std::string, llvm::Value*> namedValuesInFunc;
-    auto originalNamedValues = namedValues;
+    
     // 関数の引数イテレータとASTの仮引数名リストを同時にループ
     auto param_it = node->parameters.begin();
     for(auto& arg: func->args()){
@@ -120,10 +112,14 @@ void CodeGen::visit(FunctionDefNode *node){
         // メモリ確保・値を代入・シンボルテーブル登録
         auto allocaInst = builder->CreateAlloca(arg.getType(), nullptr, paramName);
         builder->CreateStore(&arg, allocaInst);
-        namedValuesInFunc[paramName] = allocaInst;
+        
+        // semanticAnalysisのシンボルテーブルに登録
+        Symbol* symbol = semanticAnalysis.lookupSymbol(paramName);
+        if(symbol) symbol->llvmValue = allocaInst;
+
         param_it++;
     }
-    namedValues = namedValuesInFunc;
+    
     visit(node->body.get());
 
     // return命令がない場合に自動で追加
@@ -137,8 +133,6 @@ void CodeGen::visit(FunctionDefNode *node){
         errorHandler.errorReg("LLVM Function " + node-> name + " Vertification Failed!", 0);
     }
 
-    // シンボルテーブルをもとに戻す
-    namedValues = originalNamedValues;
     if(originalBlock) builder->SetInsertPoint(originalBlock); // 元の場所に戻す
 }
 
@@ -250,11 +244,12 @@ llvm::Value* CodeGen::generateInputCall(FunctionCallNode *node){
         errorHandler.errorReg("Unknown argument to input function.", 0);
         return nullptr;
     }
-    llvm::Value* varAddress = namedValues[varRef->name];
-    if(!varAddress){
+    Symbol* symbol = semanticAnalysis.lookupSymbol(varRef->name);
+    if(!symbol || !symbol->llvmValue){
         errorHandler.errorReg("Unknown variable to input function.", 0);
         return nullptr;
     }
+    llvm::Value* varAddress = symbol->llvmValue;
     auto allocaInst = llvm::dyn_cast<llvm::AllocaInst>(varAddress);
     llvm::Type* varType = allocaInst->getAllocatedType();
     if(varType->isIntegerTy(32)) formatStr += "%d";
@@ -272,51 +267,51 @@ llvm::Value* CodeGen::generateInputCall(FunctionCallNode *node){
 }
 
 // varDecl 変数宣言
-llvm::Value* CodeGen::visit(VarDeclNode* node){
-    std::string varName = node->varName;
-    llvm::Type* varType = nullptr;
-    if(node->type){
-        varType = translateType(node->type->getTypeName());
-    }else if(node->initializer){
-        // TODO: 複数型対応
-        varType = builder->getInt64Ty();
-    }else{
-        // 型注釈も初期化式もないとき
-        errorHandler.errorReg("The variable declaration has neither a type annotation nor an initialization expression.", 1); // 警告を出す
-        varType = builder->getInt64Ty();
+void CodeGen::visit(VarDeclNode* node){
+    // シンボルテーブルから取得
+    Symbol* symbol = semanticAnalysis.lookupSymbol(node->varName);
+    if(!symbol){
+        // セマンティック解析でエラーになるはず
+        return;
     }
+    // ASTノードに付与された型情報からLLVMの型を取得
+    llvm::Type* varType = TypeTranslate::toLlvmType(node->type.get(), *context);
     if(!varType){
-        // translateTypeがエラーメッセージを出しているはず
-        return nullptr;
+        // 有効ではない型はエラーが報告されているはず
+        return;
     }
-    auto allocaInst = builder->CreateAlloca(varType, nullptr, varName);
-    // シンボルテーブルに登録
-    namedValues[node->varName] = allocaInst;
+    // allocaを生成
+    auto allocaInst = builder->CreateAlloca(varType, nullptr, node->varName);
+    // 生成したValue* をシンボルテーブルのsymbolに格納
+    symbol->llvmValue = allocaInst;
+    // 初期化式があればstoreを生成
     if(node->initializer){
         llvm::Value* initVal = visit(node->initializer.get());
-        if(initVal)
-        // TODO: 型チェックとキャスト(int -> i32)
-        builder->CreateStore(initVal, allocaInst);
+        if(initVal){
+            builder->CreateStore(initVal, allocaInst);
+        }
     }
-    return 0;
+    return;
 }
 
 // assignment 代入
-llvm::Value* CodeGen::visit(AssignmentNode *node){
-    std::string varName = node->varName;
-    auto it = namedValues.find(varName);
-    if(it == namedValues.end()){
-        errorHandler.errorReg("Assignment to undeclared variable '" + varName + "'",0);
-        return nullptr;
-    }
-    auto address = namedValues[varName];
+void CodeGen::visit(AssignmentNode *node){
+    // 右辺の値を先に評価
     llvm::Value* val = visit(node->value.get());
     if(!val){
-        errorHandler.errorReg("Assignment of empty expression to variable '" + varName + "'", 0);
-        return nullptr;
+        errorHandler.errorReg("Assignment of empty expression to variable '" + node->varName + "'", 0);
+        return;
     }
-    builder->CreateStore(val, address);
-    return nullptr;
+
+    // シンボルテーブルから変数のアドレスを探す
+    Symbol* symbol = semanticAnalysis.lookupSymbol(node->varName);
+    if(!symbol || !symbol->llvmValue){
+        errorHandler.errorReg("Assignment to undeclared variable '" + node->varName + "'",0);
+        return;
+    }
+    
+    llvm::Value* varAddress = symbol->llvmValue;
+    builder->CreateStore(val, varAddress);
 }
 
 // if 条件分岐
@@ -382,16 +377,11 @@ llvm::Value* CodeGen::visit(BinaryOpNode *node){
     // 右辺と左辺を再帰的にvisit
     llvm::Value* lval = visit(node->left.get());
     llvm::Value* rval = visit(node->right.get());
-    if (!lval || !rval) {
-        errorHandler.errorReg("One of the operands in a binary operation is null.", 0);
-        return nullptr; 
-    }
-    if(lval->getType() != rval->getType()){
-        errorHandler.errorReg("Currently type casting is not supported.", 0);
-        return nullptr;
-    }
+    if(!lval || !rval) return nullptr;
+    // ASTノードの型情報を取得
+    TypeNode* operandType = node->left->type.get();
     // opを確認
-    if(lval->getType()->isIntegerTy(32) || lval->getType()->isIntegerTy(64)){
+    if(operandType->isInteger()){
         if(node->op == "+") return builder->CreateAdd(lval, rval, "addtmp");
         else if(node->op == "-") return builder->CreateSub(lval, rval, "subtmp");
         else if(node->op == "*") return builder->CreateMul(lval, rval, "multmp");
@@ -406,7 +396,7 @@ llvm::Value* CodeGen::visit(BinaryOpNode *node){
             errorHandler.errorReg("Unknown operator in integer.", 0);
             return nullptr;
         }
-    }else if(lval->getType()->isDoubleTy()){
+    }else if(operandType->isFloat()){
         if(node->op == "+") return builder->CreateFAdd(lval, rval, "faddtmp");
         else if(node->op == "-") return builder->CreateFSub(lval, rval, "fsubtmp");
         else if(node->op == "*") return builder->CreateFMul(lval, rval, "fmultmp");
@@ -435,7 +425,7 @@ llvm::Value* CodeGen::visit(CastNode *node){
         return nullptr;
     }
     llvm::Type* originalLlvmType = originalValue->getType(); // キャスト元の型
-    std::shared_ptr<TypeNode> targetTypeNode = node->targetType;
+    TypeNode* targetTypeNode = node->type.get();
     if(!targetTypeNode){
         errorHandler.errorReg("Target type for cast is null.", 0);
         return nullptr;
@@ -458,20 +448,13 @@ llvm::Value* CodeGen::visit(CastNode *node){
 
 // VariableRef 変数参照
 llvm::Value* CodeGen::visit(VariableRefNode *node){
-    // シンボルテーブルから変数のアドレスを探す
-    auto it = namedValues.find(node->name);
-    if (it == namedValues.end()) {
-        errorHandler.errorReg("Unknown variable name '" + node->name + "'", 0);
+    // シンボルテーブルから取得
+    Symbol* symbol = semanticAnalysis.lookupSymbol(node->name);
+    if(!symbol || !symbol->llvmValue){
+        errorHandler.errorReg("LLVM value not found for " + node->name, -1);
         return nullptr;
     }
-    llvm::Value* varAddress = it->second;
-    // 変数がなかったらエラー
-    if(!varAddress){
-        errorHandler.errorReg("Unknown variable name '" + node->name + "'", 0);
-        return nullptr;
-    }
-    // load命令を生成
-    // 値の型, アドレス, IRのレジスタ名(デバッグ用)
-    auto allocaInst = llvm::dyn_cast<llvm::AllocaInst>(varAddress);
-    return builder->CreateLoad(allocaInst->getAllocatedType(), varAddress, node->name.c_str());
+    llvm::Value* varAddress = symbol->llvmValue;
+    llvm::Type* loadType = TypeTranslate::toLlvmType(node->type.get(), *context);
+    return builder->CreateLoad(loadType, varAddress, node->name.c_str());
 }

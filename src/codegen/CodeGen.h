@@ -9,6 +9,9 @@
 #include "../ast/Statement.h"
 #include "../ast/Definition.h"
 
+// セマンティック解析
+#include "semantic/SemanticAnalysis.h"
+
 class CodeGen{
 private:
     // LLVMの全体的な状態を管理するコンテナ
@@ -18,12 +21,12 @@ private:
     std::unique_ptr<llvm::Module> module;
     // IRの命令を生成するためのヘルパークラス
     std::unique_ptr<llvm::IRBuilder<>> builder;
-    // シンボルテーブル(関数名とメモリアドレス(llvm::Value*))を対応付けるmap
-    std::map<std::string, llvm::Value*> namedValues;
     // Lumaの型からLLVMの型に変換する
     llvm::Type* translateType(std::string typeName);
+    // SemanticAnalysisへの参照
+    SemanticAnalysis& semanticAnalysis;
 public:
-    CodeGen();
+    CodeGen(SemanticAnalysis& sema);
     // ASTのルートノードを受け取り、コード生成を開始するメインメソッド
     void generate(ProgramNode *root);
     // 生成したModuleを外部に渡すメソッド
@@ -35,8 +38,8 @@ private:
     void visit(StatementNode *node);
     void visit(BlockNode *node);
     void visit(FunctionDefNode *node);
-    llvm::Value* visit(VarDeclNode *node);
-    llvm::Value* visit(AssignmentNode *node);
+    void visit(VarDeclNode *node);
+    void visit(AssignmentNode *node);
     void visit(IfNode *node);
     void visit(ForNode *node);
     llvm::Value* visit(ExprNode *node);

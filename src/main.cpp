@@ -22,6 +22,7 @@
 
 // CodeGen
 #include "codegen/CodeGen.h"
+#include "semantic/SemanticAnalysis.h"
 // ErrorHandler
 #include "common/Global.h"
 
@@ -54,14 +55,14 @@ int main(int argc, char* argv[]){
             auto progNode = std::any_cast<std::shared_ptr<ProgramNode>>(astRootAny);
 
             // Semantic Analysis
-            // SemanticAnalysis semanticAnalyzer;
-            // semanticAnalyzer.analyze(progNode.get());
-            // if (errorHandler.hasError()) {
-            //     errorHandler.printAllErrors();
-            //     return 1;
-            // }
+            SemanticAnalysis semanticAnalyzer;
+            semanticAnalyzer.visit(progNode.get());
+            if (semanticAnalyzer.hasErrors()) {
+                errorHandler.printAllErrors();
+                return 1;
+            }
 
-            CodeGen codeGenerator;
+            CodeGen codeGenerator(semanticAnalyzer);
             codeGenerator.generate(progNode.get());
             auto context = std::make_unique<llvm::LLVMContext>();
             llvm::Module* module = codeGenerator.getModule();

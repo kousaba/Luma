@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(Luma LANGUAGES CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_BUILD_TYPE Debug)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,6 +70,7 @@ add_executable(Luma
     src/codegen/CodeGen.cpp
     src/common/ErrorHandler.cpp
     src/semantic/SemanticAnalysis.cpp
+    src/types/TypeTranslate.cpp
     ${ANTLR_GENERATED_DIR}/LumaLexer.cpp   # 個別に指定
     ${ANTLR_GENERATED_DIR}/LumaParser.cpp
     ${ANTLR_GENERATED_DIR}/LumaParserVisitor.cpp
