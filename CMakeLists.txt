@@ -72,6 +72,7 @@ add_executable(Luma
     src/types/TypeTranslate.cpp
     src/mirgen/MIRGen.cpp
     src/llvmgen/LLVMGen.cpp
+    src/mir/MIRTerminator.cpp
     ${ANTLR_GENERATED_DIR}/LumaLexer.cpp   # 個別に指定
     ${ANTLR_GENERATED_DIR}/LumaParser.cpp
     ${ANTLR_GENERATED_DIR}/LumaParserVisitor.cpp

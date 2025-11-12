@@ -45,8 +45,10 @@ void LLVMGen::visit(MIRFunction *node){
         args.push_back(TypeTranslate::toLlvmType(param->type.get(), *context));
     }
 
+    llvm::Type* retType = TypeTranslate::toLlvmType(node->returnType.get(), *context);
+
     llvm::FunctionType* funcType = llvm::FunctionType::get(
-        TypeTranslate::toLlvmType(node->returnType.get(), *context),
+        retType,
         args,
         false
     );
@@ -87,7 +89,6 @@ void LLVMGen::visit(MIRInstruction *node){
     if(auto loadInst = dynamic_cast<MIRLoadInstruction*>(node)) return visit(loadInst);
     if(auto binaryInst = dynamic_cast<MIRBinaryInstruction*>(node)) return visit(binaryInst);
     if(auto unaryInst = dynamic_cast<MIRUnaryInstruction*>(node)) return visit(unaryInst);
-    if(auto returnInst = dynamic_cast<MIRReturnInstruction*>(node)) return visit(returnInst);
     errorHandler.errorReg("Unhandled MIRInstruction type: " + std::string(typeid(*node).name()), 0);
 }
 
@@ -171,8 +172,8 @@ void LLVMGen::visit(MIRTerminatorInstruction *node){
 }
 
 void LLVMGen::visit(MIRReturnInstruction *node){
-    if(node->result.get()){
-        auto retVal = visit(node->result.get());
+    if(node->returnValue){
+        auto retVal = visit(node->returnValue.get());
         if(retVal){
             builder->CreateRet(retVal);
         }else{
@@ -229,4 +230,6 @@ llvm::Value* LLVMGen::visit(MIRCastInstruction *node){
     auto operand = visit(node->operand.get());
     auto targetType = TypeTranslate::toLlvmType(node->targetType.get(), *context);
     auto operandType = operand->getType();
+    // TODO: 実装
+    return nullptr;
 }

@@ -1,13 +1,13 @@
 #pragma once
-#include "mir/MIRInstruction.h" // MIRInstruction.h は MIRValue.h をインクルードしているはず
+#include "mir/MIRNode.h"
+#include "mir/MIRValue.h"
 
-// 前方宣言
-class MIRBasicBlock;
+class MIRBasicBlock; // Forward declaration
 
 // 終端命令の基底クラス(制御フローを決定する命令)
-class MIRTerminatorInstruction : public MIRInstruction{
+class MIRTerminatorInstruction : public MIRNode{
 public:
-    explicit MIRTerminatorInstruction(NodeType type) : MIRInstruction(type) {}
+    explicit MIRTerminatorInstruction(NodeType type) : MIRNode(type) {}
     // 各派生クラスで実装される
     void dump(std::ostream& os, int indent = 0) const override = 0;
 };
@@ -19,16 +19,7 @@ public:
     explicit MIRReturnInstruction(std::shared_ptr<MIRValue> retVal = nullptr)
         : MIRTerminatorInstruction(NodeType::ReturnInstruction), returnValue(retVal) {}
 
-    void dump(std::ostream& os, int indent = 0) const override {
-        printMirIndent(indent);
-        os << "ret ";
-        if (returnValue) {
-            returnValue->dump(os);
-        } else {
-            os << "void";
-        }
-        os << std::endl;
-    }
+    void dump(std::ostream& os, int indent = 0) const override;
 };
 
 // 無条件分岐命令
