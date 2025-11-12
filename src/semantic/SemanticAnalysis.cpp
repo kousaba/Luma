@@ -277,9 +277,12 @@ TypeNode* SemanticAnalysis::visit(CastNode *node){
 // 式以外
 void SemanticAnalysis::visit(ProgramNode *node){
     enterScope();
+    currentFunctionReturnType = typePtr["int"].get();
     for(auto stmt : node->statements){
         visit(stmt.get());
     }
+    currentFunctionReturnType = nullptr;
+    leaveScope();
 }
 void SemanticAnalysis::visit(BlockNode *node){
     enterScope();
@@ -308,7 +311,29 @@ void SemanticAnalysis::visit(ForNode *node){
     visit(node->block.get());
 }
 void SemanticAnalysis::visit(ReturnNode *node){
-    // TODO: fnの戻り値と型が同じか調べる
+    if(!currentFunctionReturnType){
+        errorHandler.errorReg("Return statement outside of a function.", 0);
+        return;
+    }
+    if(node->returnValue){
+        TypeNode* returnExprType = visit(node->returnValue.get());
+        if(returnExprType){
+            if (returnExprType->getTypeName() == "unknown" || 
+            (dynamic_cast<NumberLiteralNode*>(node->returnValue.get()) && returnExprType->getTypeName()== "int")){
+                node->returnValue->type = currentFunctionReturnType->shared_from_this();
+                returnExprType = currentFunctionReturnType;
+            }
+            if(returnExprType->getTypeName() != currentFunctionReturnType->getTypeName()){
+                errorHandler.errorReg("Return type mismatch. Expected '" + currentFunctionReturnType->getTypeName() 
+                + "' but got '" + returnExprType->getTypeName() + "'.", 0);
+            }
+        }
+    }else{
+        if(currentFunctionReturnType->getTypeName() != "void"){
+            errorHandler.errorReg("Return value expected for function returning '" + currentFunctionReturnType->getTypeName()
+            + "'.", 0);
+        }
+    }
 }
 void SemanticAnalysis::visit(ExprStatementNode *node){
     if(node->expression){
@@ -329,4 +354,12 @@ void SemanticAnalysis::visit(StatementNode *node){
     else{
         errorHandler.compilerErrorReg(CompilerErrorCode::STMT_VISIT_COULDNOT_CAST, {std::string(typeid(*node).name())});
     }
+}
+
+std::shared_ptr<TypeNode> SemanticAnalysis::getType(const std::string& name) const {
+    auto it = typePtr.find(name);
+    if (it != typePtr.end()) {
+        return it->second;
+    }
+    return nullptr;
 }

@@ -62,7 +62,6 @@ set(ANTLR_GENERATED_SOURCES
     ${ANTLR_PARSER_OUTPUTS}
 )
 add_custom_target(LumaAntlrGenerator DEPENDS ${ANTLR_GENERATED_SOURCES})
-
 # --- 4. メインの実行可能ファイル "Luma" の定義 ---
 add_executable(Luma
     src/main.cpp
@@ -71,6 +70,8 @@ add_executable(Luma
     src/common/ErrorHandler.cpp
     src/semantic/SemanticAnalysis.cpp
     src/types/TypeTranslate.cpp
+    src/mirgen/MIRGen.cpp
+    src/llvmgen/LLVMGen.cpp
     ${ANTLR_GENERATED_DIR}/LumaLexer.cpp   # 個別に指定
     ${ANTLR_GENERATED_DIR}/LumaParser.cpp
     ${ANTLR_GENERATED_DIR}/LumaParserVisitor.cpp

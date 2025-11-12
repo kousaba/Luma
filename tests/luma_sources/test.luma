@@ -1,14 +1,1 @@
-var a : i32 = 10 as i32;
-var b : int = 32;
-var c = (a as int) + 32;
-print(c);
-if(c == 42){
-    print(a);
-}else{
-    print(b);
-}
-for c > 40{
-    c = c - 1;
-    print(b);
-}
-var a;
+return 0;

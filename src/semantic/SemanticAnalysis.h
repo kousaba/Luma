@@ -36,6 +36,7 @@ private:
     // 基本型
     std::unordered_map<std::string, std::shared_ptr<TypeNode>> typePtr;
     bool is_type(std::string typeName);
+    TypeNode* currentFunctionReturnType = nullptr;
 public: // ★ここから public にする
     // コンストラクタ
     SemanticAnalysis();
@@ -43,6 +44,7 @@ public: // ★ここから public にする
     // エラーがあるか
     bool hasErrors();
     Symbol* lookupSymbol(const std::string& name); // ★ここへ移動
+    std::shared_ptr<TypeNode> getType(const std::string& name) const; // ゲッターを追加
     // visit処理
     TypeNode* visit(BinaryOpNode *node);
     TypeNode* visit(FunctionCallNode *node);

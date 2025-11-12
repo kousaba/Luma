@@ -31,6 +31,7 @@ antlrcpp::Any AstBuilder::visitStatement(Luma::LumaParser::StatementContext *ctx
     if(ctx->ifStatement()) return visit(ctx->ifStatement());
     if(ctx->forStatement()) return visit(ctx->forStatement());
     if(ctx->functionDefinition()) return visit(ctx->functionDefinition());
+    if(ctx->returnStatement()) return visit(ctx->returnStatement());
     if(ctx->expr()){
         antlrcpp::Any exprAny = visit(ctx->expr());
         auto exprNode = std::any_cast<std::shared_ptr<ExprNode>>(exprAny);
@@ -65,8 +66,14 @@ antlrcpp::Any AstBuilder::visitParameterList(Luma::LumaParser::ParameterListCont
     return nullptr;
 }
 antlrcpp::Any AstBuilder::visitReturnStatement(Luma::LumaParser::ReturnStatementContext *ctx){
-    // TOOD: return処理
-    return nullptr;
+    std::shared_ptr<ReturnNode> node = nullptr;
+    if(ctx->expr()){
+        auto retVal = std::any_cast<std::shared_ptr<ExprNode>>(visit(ctx->expr()));
+        node = std::make_shared<ReturnNode>(retVal);
+    }else{
+        node = std::make_shared<ReturnNode>(nullptr);
+    }
+    return std::shared_ptr<StatementNode>(node);
 }
 
 antlrcpp::Any AstBuilder::visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) {
@@ -109,11 +116,13 @@ antlrcpp::Any AstBuilder::visitAssignmentStatement(Luma::LumaParser::AssignmentS
 antlrcpp::Any AstBuilder::visitIfStatement(Luma::LumaParser::IfStatementContext *ctx){
     antlrcpp::Any conditionAny = visit(ctx->expr());
     antlrcpp::Any ifblockAny = visit(ctx->block(0));
-    antlrcpp::Any elseblockAny = visit(ctx->block(1));
     std::shared_ptr<BlockNode> elseblock = nullptr;
     std::shared_ptr<ExprNode> condition = std::any_cast<std::shared_ptr<ExprNode>>(conditionAny);
     std::shared_ptr<BlockNode> ifblock = std::any_cast<std::shared_ptr<BlockNode>>(ifblockAny);
-    if(ctx->block(1)) elseblock = std::any_cast<std::shared_ptr<BlockNode>>(elseblockAny);
+    if(ctx->block(1)){
+        antlrcpp::Any elseblockAny = visit(ctx->block(1));
+        elseblock = std::any_cast<std::shared_ptr<BlockNode>>(elseblockAny);
+    }
     auto node = std::make_shared<IfNode>(condition, ifblock, elseblock);
     antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
     return result;
