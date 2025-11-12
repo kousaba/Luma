@@ -282,7 +282,6 @@ void SemanticAnalysis::visit(ProgramNode *node){
         visit(stmt.get());
     }
     currentFunctionReturnType = nullptr;
-    leaveScope();
 }
 void SemanticAnalysis::visit(BlockNode *node){
     enterScope();
