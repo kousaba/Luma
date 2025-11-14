@@ -38,7 +38,7 @@ private:
     std::shared_ptr<MIRBasicBlock> currentBlock = nullptr; // 現在命令を追加中の基本ブロック
     
     // ASTシンボルとMIRの値（メモリアドレス）のマッピング
-    std::map<Symbol*, std::shared_ptr<MIRValue>> symbolValueMap;
+    std::map<std::shared_ptr<Symbol>, std::shared_ptr<MIRValue>> symbolValueMap;
     
     // 一時レジスタのカウンタ
     int tempCounter = 0;

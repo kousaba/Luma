@@ -1,6 +1,8 @@
 #pragma once
 #include "AstNode.h"
 #include "Expression.h"
+#include "mir/MIRBasicBlock.h"
+#include "semantic/Symbol.h"
 #include "types/Type.h"
 #include <memory>
 #include <string>
@@ -47,6 +49,7 @@ public:
     // 初期化式を保持するポインタ(式がない場合はnullptr)
     std::shared_ptr<ExprNode> initializer;
     std::shared_ptr<TypeNode> type; // 変数の型
+    std::shared_ptr<Symbol> symbol = nullptr;
     VarDeclNode(const std::string& name, std::shared_ptr<TypeNode> t, std::shared_ptr<ExprNode> init) : varName(name), type(t),initializer(init){}
     void dump(int indent = 0) const override {
         printIndent(indent);
@@ -65,6 +68,7 @@ class AssignmentNode : public StatementNode{
 public:
     std::string varName; // 代入先の変数名
     std::shared_ptr<ExprNode> value; // 代入する値の式
+    std::shared_ptr<Symbol> symbol = nullptr;
     AssignmentNode(const std::string& name, std::shared_ptr<ExprNode> val) : varName(name), value(val){}
     void dump(int indent = 0) const override {
         printIndent(indent);
@@ -82,6 +86,11 @@ public:
     std::shared_ptr<ExprNode> condition; // 条件式
     std::shared_ptr<BlockNode> if_block; // ifブロック
     std::shared_ptr<BlockNode> else_block; // elseブロック (オプション)
+
+    // MIR生成のために追加する情報
+    MIRBasicBlock* thenBlock = nullptr;
+    MIRBasicBlock* elseBlock = nullptr;
+    MIRBasicBlock* mergeBlock = nullptr;
     IfNode(std::shared_ptr<ExprNode> cond, std::shared_ptr<BlockNode> ifblock, std::shared_ptr<BlockNode> elseblock = nullptr) : condition(cond), if_block(ifblock), else_block(elseblock){}
     void dump(int indent = 0) const override {
         printIndent(indent);

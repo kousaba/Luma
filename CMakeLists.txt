@@ -66,13 +66,13 @@ add_custom_target(LumaAntlrGenerator DEPENDS ${ANTLR_GENERATED_SOURCES})
 add_executable(Luma
     src/main.cpp
     src/parser/AstBuilder.cpp
-    src/codegen/CodeGen.cpp
     src/common/ErrorHandler.cpp
     src/semantic/SemanticAnalysis.cpp
     src/types/TypeTranslate.cpp
     src/mirgen/MIRGen.cpp
     src/llvmgen/LLVMGen.cpp
     src/mir/MIRTerminator.cpp
+    src/semantic/Symbol.cpp
     ${ANTLR_GENERATED_DIR}/LumaLexer.cpp   # 個別に指定
     ${ANTLR_GENERATED_DIR}/LumaParser.cpp
     ${ANTLR_GENERATED_DIR}/LumaParserVisitor.cpp

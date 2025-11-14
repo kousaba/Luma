@@ -1,6 +1,4 @@
 #pragma once
-#include "ast/Expression.h"
-#include "ast/Statement.h"
 #include "types/Type.h"
 #include <llvm/IR/Value.h>
 #include <string>
@@ -8,42 +6,45 @@
 #include <unordered_set>
 #include <vector>
 #include <map>
+#include <memory>
+#include "Symbol.h"
 
-enum class SymbolKind{
-    VAR,
-    FUNC,
-    STRUCT
-};
+// Forward declarations for AST nodes
+class ProgramNode;
+class BlockNode;
+class IfNode;
+class ForNode;
+class ReturnNode;
+class VarDeclNode;
+class AssignmentNode;
+class ExprStatementNode;
+class StatementNode;
+class BinaryOpNode;
+class FunctionCallNode;
+class NumberLiteralNode;
+class DecimalLiteralNode;
+class VariableRefNode;
+class CastNode;
+class ExprNode;
 
-struct Symbol{
-    SymbolKind kind;
-    std::string name;
-    TypeNode* type;
-    llvm::Value* llvmValue = nullptr;
-    std::vector<TypeNode*> argTypes;
-    
-    Symbol(const std::string& name, TypeNode* type) : kind(SymbolKind::VAR), name(name), type(type) {} // 変数用
-    Symbol(const std::string& name, TypeNode* returnType, const std::vector<TypeNode*>& args) : kind(SymbolKind::FUNC), name(name), type(returnType), argTypes(args){}// 関数用
-    Symbol() = delete;
-};
 
 class SemanticAnalysis{
 private:
-    std::vector<std::map<std::string, std::unique_ptr<Symbol>>> symbolTable;
+    std::vector<std::map<std::string, std::shared_ptr<Symbol>>> symbolTable;
     void enterScope();
     void leaveScope();
-    bool addSymbol(std::unique_ptr<Symbol> symbol);
+    bool addSymbol(std::shared_ptr<Symbol> symbol);
     // 基本型
     std::unordered_map<std::string, std::shared_ptr<TypeNode>> typePtr;
     bool is_type(std::string typeName);
     TypeNode* currentFunctionReturnType = nullptr;
-public: // ★ここから public にする
+public:
     // コンストラクタ
     SemanticAnalysis();
     // main用
     // エラーがあるか
     bool hasErrors();
-    Symbol* lookupSymbol(const std::string& name); // ★ここへ移動
+    std::shared_ptr<Symbol> lookupSymbol(const std::string& name);
     std::shared_ptr<TypeNode> getType(const std::string& name) const; // ゲッターを追加
     // visit処理
     TypeNode* visit(BinaryOpNode *node);

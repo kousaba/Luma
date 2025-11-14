@@ -35,7 +35,7 @@ bool SemanticAnalysis::hasErrors(){
 }
 
 void SemanticAnalysis::enterScope(){
-    symbolTable.push_back(std::map<std::string, std::unique_ptr<Symbol>>());
+    symbolTable.push_back(std::map<std::string, std::shared_ptr<Symbol>>());
 }
 void SemanticAnalysis::leaveScope(){
     if(!symbolTable.empty()){
@@ -44,7 +44,7 @@ void SemanticAnalysis::leaveScope(){
         errorHandler.compilerErrorReg(CompilerErrorCode::LEAVESCOPE_WITH_EMPTY_SYMBOLTABLE, {});
     }
 }
-bool SemanticAnalysis::addSymbol(std::unique_ptr<Symbol> symbol){
+bool SemanticAnalysis::addSymbol(std::shared_ptr<Symbol> symbol){
     if(symbolTable.empty()){
         errorHandler.compilerErrorReg(CompilerErrorCode::ADDSYMBOL_WITH_NO_SCOPE, {});
         return false;
@@ -53,14 +53,14 @@ bool SemanticAnalysis::addSymbol(std::unique_ptr<Symbol> symbol){
         errorHandler.errorReg(ErrorCode::ADDSYMBOL_ALREADY_CONTAINS, {});
         return false;
     }
-    symbolTable.back()[symbol->name] = std::move(symbol);
+    symbolTable.back()[symbol->name] = symbol;
     return true;
 }
-Symbol* SemanticAnalysis::lookupSymbol(const std::string& name){
+std::shared_ptr<Symbol> SemanticAnalysis::lookupSymbol(const std::string& name){
     for(auto it = symbolTable.rbegin(); it != symbolTable.rend(); ++it){
         auto symbolIt = it->find(name);
         if(symbolIt != it->end()){
-            return symbolIt->second.get();
+            return symbolIt->second;
         }
     }
     return nullptr; // 見つからなかった
@@ -115,7 +115,7 @@ void SemanticAnalysis::visit(VarDeclNode *node){
         return;
     }
     if (!is_type(typeName)) {
-        Symbol* typeSymbol = lookupSymbol(typeName);
+        auto typeSymbol = lookupSymbol(typeName);
         if (!typeSymbol || (typeSymbol->kind != SymbolKind::STRUCT)) {
             errorHandler.errorReg(ErrorCode::VARDECL_TYPE_NOT_DEFINED, {typeName, node->varName});
             return;
@@ -123,11 +123,12 @@ void SemanticAnalysis::visit(VarDeclNode *node){
     }
 
     // ステップ3: シンボルテーブルに登録する
-    auto newSymbol = std::make_unique<Symbol>(node->varName, varType.get());
-    if (!addSymbol(std::move(newSymbol))) {
+    auto newSymbol = std::make_shared<Symbol>(node->varName, varType.get());
+    if (!addSymbol(newSymbol)) {
         // addSymbol内で二重定義エラーが出力される
         return;
     }
+    node->symbol = newSymbol; // Assign the shared_ptr to the node
 
     // ステップ4: 型注釈と初期化式の型が一致するかチェックする
     if (node->type && node->initializer) {
@@ -172,7 +173,7 @@ TypeNode* SemanticAnalysis::visit(FunctionCallNode *node){
         return typePtr["void"].get();
     }
 
-    Symbol* funcSymbol = lookupSymbol(node->calleeName);
+    auto funcSymbol = lookupSymbol(node->calleeName);
     if(!funcSymbol){
         errorHandler.errorReg(ErrorCode::FUNCCALL_NOT_DEFINED, {node->calleeName});
         return nullptr;
@@ -207,7 +208,7 @@ TypeNode* SemanticAnalysis::visit(FunctionCallNode *node){
 }
 
 void SemanticAnalysis::visit(AssignmentNode *node){
-    Symbol* varSymbol = lookupSymbol(node->varName);
+    auto varSymbol = lookupSymbol(node->varName);
     if(!varSymbol){
         errorHandler.errorReg(ErrorCode::ASSIGNMENT_NOT_DEFINED, {node->varName});
         return;
@@ -216,6 +217,7 @@ void SemanticAnalysis::visit(AssignmentNode *node){
         errorHandler.errorReg(ErrorCode::ASSIGNMENT_NOT_VARIABLE, {node->varName});
         return;
     }
+    node->symbol = varSymbol;
     TypeNode* varType = varSymbol->type;
     TypeNode* valueType = visit(node->value.get());
     if(!valueType){
@@ -238,7 +240,7 @@ TypeNode* SemanticAnalysis::visit(DecimalLiteralNode *node){
     return typePtr["float"].get();
 }
 TypeNode* SemanticAnalysis::visit(VariableRefNode *node){
-    Symbol* varSymbol = lookupSymbol(node->name);
+    auto varSymbol = lookupSymbol(node->name);
     if(!varSymbol){
         errorHandler.errorReg(ErrorCode::VARREF_NOT_DEFINED, {node->name});
         return nullptr;
@@ -247,6 +249,7 @@ TypeNode* SemanticAnalysis::visit(VariableRefNode *node){
         errorHandler.errorReg(ErrorCode::VARREF_NOT_VARIABLE, {node->name});
         return nullptr;
     }
+    node->symbol = varSymbol;
     node->type = varSymbol->type->shared_from_this();
     return varSymbol->type;
 }

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include "../../src/types/Type.h" // Type.h をインクルード
+#include "semantic/Symbol.h"
 
 // 式の基底クラス
 class ExprNode : public AstNode{
@@ -41,6 +42,7 @@ public:
 class VariableRefNode : public ExprNode{
 public:
     std::string name; // 変数名
+    std::shared_ptr<Symbol> symbol = nullptr;
     VariableRefNode(const std::string& varName) : name(varName) {}
     void dump(int indent = 0) const override {
         printIndent(indent);

@@ -118,7 +118,7 @@ void MIRGen::visit(FunctionDefNode* node) {
     //     auto storeInst = std::make_shared<MIRStoreInstruction>(argValue, allocaInst->result);
     //     entryBlock->addInstruction(storeInst);
 
-    //     Symbol* symbol = semanticAnalysis.lookupSymbol(node->parameters[i]);
+    //     auto symbol = semanticAnalysis.lookupSymbol(node->parameters[i]); // This would need adjustment based on how parameters are represented.
     //     if (symbol) {
     //         symbolValueMap[symbol] = allocaInst->result;
     //     }
@@ -149,11 +149,11 @@ void MIRGen::visit(VarDeclNode* node) {
 
     entryBlock->instructions.insert(entryBlock->instructions.begin(), allocaInst);
 
-    Symbol* symbol = semanticAnalysis.lookupSymbol(node->varName);
+    auto symbol = node->symbol;
     if (symbol) {
         symbolValueMap[symbol] = allocaInst->result;
     } else {
-        errorHandler.errorReg("Symbol not found for variable: " + node->varName, 0);
+        errorHandler.errorReg("Symbol not attached to VarDeclNode for: " + node->varName, 0);
         return;
     }
 
@@ -173,7 +173,7 @@ void MIRGen::visit(AssignmentNode* node) {
         return;
     }
 
-    Symbol* symbol = semanticAnalysis.lookupSymbol(node->varName);
+    auto symbol = node->symbol;
     if (!symbol || !symbolValueMap.count(symbol)) {
         errorHandler.errorReg("Assignment to undeclared variable '" + node->varName + "'", 0);
         return;
@@ -194,6 +194,9 @@ void MIRGen::visit(IfNode* node) {
     std::shared_ptr<MIRBasicBlock> thenBlock = createBasicBlock("if.then");
     std::shared_ptr<MIRBasicBlock> elseBlock = createBasicBlock("if.else");
     std::shared_ptr<MIRBasicBlock> mergeBlock = createBasicBlock("if.merge");
+    node->thenBlock = thenBlock.get();
+    node->elseBlock = elseBlock.get();
+    node->mergeBlock = mergeBlock.get();
 
     currentBlock->setTerminator(std::make_shared<MIRConditionBranchInstruction>(conditionValue, thenBlock, elseBlock));
 
@@ -274,7 +277,7 @@ std::shared_ptr<MIRValue> MIRGen::visit(DecimalLiteralNode* node) {
 }
 
 std::shared_ptr<MIRValue> MIRGen::visit(VariableRefNode* node) {
-    Symbol* symbol = semanticAnalysis.lookupSymbol(node->name);
+    auto symbol = node->symbol;
     if (!symbol || !symbolValueMap.count(symbol)) {
         errorHandler.errorReg("Undefined variable reference: " + node->name, 0);
         return nullptr;

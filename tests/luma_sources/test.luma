@@ -1,3 +1,9 @@
-var a: i32 = 10 as i32;
-var b: float = 5 as float;
-return a as int;
+var a: int = 5;
+if a == 5{
+    var b: int = 3;
+    return 5;
+}
+return 3;
+for a < 5{
+    var c: int = 5;
+}
