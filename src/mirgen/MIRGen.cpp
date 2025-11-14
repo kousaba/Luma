@@ -300,10 +300,10 @@ std::shared_ptr<MIRValue> MIRGen::visit(BinaryOpNode* node) {
     else if (node->op == "/") { op_str = "sdiv"; }
     else if (node->op == "==") { op_str = "icmp eq"; }
     else if (node->op == "!=") { op_str = "icmp ne"; }
-    else if (node->op == "<") { op_str = "icmp slt"; }
-    else if (node->op == ">") { op_str = "icmp sgt"; }
-    else if (node->op == "<=") { op_str = "icmp sle"; }
-    else if (node->op == ">=") { op_str = "icmp sge"; }
+    else if (node->op == "<") { op_str = "icmp lt"; }
+    else if (node->op == ">") { op_str = "icmp gt"; }
+    else if (node->op == "<=") { op_str = "icmp le"; }
+    else if (node->op == ">=") { op_str = "icmp ge"; }
     else {
         errorHandler.errorReg("Unknown operator: " + node->op, 0);
         return nullptr;
