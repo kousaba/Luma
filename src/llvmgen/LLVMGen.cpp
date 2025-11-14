@@ -89,6 +89,7 @@ void LLVMGen::visit(MIRInstruction *node){
     if(auto loadInst = dynamic_cast<MIRLoadInstruction*>(node)) return visit(loadInst);
     if(auto binaryInst = dynamic_cast<MIRBinaryInstruction*>(node)) return visit(binaryInst);
     if(auto unaryInst = dynamic_cast<MIRUnaryInstruction*>(node)) return visit(unaryInst);
+    if(auto castInst = dynamic_cast<MIRCastInstruction*>(node)) {visit(castInst); return;}
     errorHandler.errorReg("Unhandled MIRInstruction type: " + std::string(typeid(*node).name()), 0);
 }
 
@@ -106,6 +107,10 @@ void LLVMGen::visit(MIRAllocaInstruction *node){
 void LLVMGen::visit(MIRStoreInstruction *node){
     llvm::Value* value = visit(node->value.get());
     llvm::Value* ptr = visit(node->pointer.get());
+    if(!value || !ptr){
+        errorHandler.errorReg("store ptr or value nullptr", -1);
+        return;
+    }
     builder->CreateStore(value, ptr);
 }
 
@@ -208,28 +213,86 @@ llvm::Value* LLVMGen::visit(MIRValue *node){
 }
 
 llvm::Value* LLVMGen::visit(MIRLiteralValue *node){
-    llvm::Type* type = TypeTranslate::toLlvmType(node->type.get(), *context);
+    // llvm::Type* type = TypeTranslate::toLlvmType(node->type.get(), *context);
 
-    std::string type_str;
-    llvm::raw_string_ostream rso(type_str);
-    type->print(rso);
-    errorHandler.errorReg("Visiting MIRLiteralValue. Type is: " + rso.str(), 2);
-    if(type->isIntegerTy()){
-        if(auto* intType = llvm::dyn_cast<llvm::IntegerType>(type)){
-            return llvm::ConstantInt::get(intType, llvm::StringRef(node->stringValue), 10);
-        }
-        errorHandler.errorReg("Failed to cast to IntegerType in LLVMGen.", 0);
+    // std::string type_str;
+    // llvm::raw_string_ostream rso(type_str);
+    // type->print(rso);
+    // errorHandler.errorReg("Visiting MIRLiteralValue. Type is: " + rso.str(), 2);
+    // if(type->isIntegerTy()){
+    //     if(auto* intType = llvm::dyn_cast<llvm::IntegerType>(type)){
+    //         return llvm::ConstantInt::get(intType, llvm::StringRef(node->stringValue), 10);
+    //     }
+    //     errorHandler.errorReg("Failed to cast to IntegerType in LLVMGen.", 0);
+    //     return nullptr;
+    // }
+    // if(type->isFloatingPointTy()) return llvm::ConstantFP::get(type, llvm::StringRef(node->stringValue));
+    // // TODO: boolなど
+    // return nullptr;
+    llvm::Type*  type = TypeTranslate::toLlvmType(node->type.get(), *context);
+    if(!type){
+        errorHandler.errorReg("Failed to translate literal type", 0);
         return nullptr;
     }
-    if(type->isFloatingPointTy()) return llvm::ConstantFP::get(type, llvm::StringRef(node->stringValue));
-    // TODO: boolなど
+    if(type->isIntegerTy()){
+        auto* intType = llvm::cast<llvm::IntegerType>(type);
+        unsigned bits = intType->getBitWidth();
+        llvm::APInt api(bits, llvm::StringRef(node->stringValue), 10);
+        return llvm::ConstantInt::get(*context, api);
+    }
+    if(type->isFloatingPointTy()){
+        double d = 0.0;
+        try{
+            d = std::stod(node->stringValue);
+        }catch(...){
+            errorHandler.errorReg("Invalid floating literal: " + node->stringValue, 0);
+            return nullptr;
+        }
+        llvm::APFloat apf(d);
+        return llvm::ConstantFP::get(*context, apf);
+    }
+    if(node->stringValue == "true") return llvm::ConstantInt::getTrue(*context);
+    if(node->stringValue == "false") return llvm::ConstantInt::getFalse(*context);
+    errorHandler.errorReg("Unsupported literal type for: " + node->stringValue, 0);
     return nullptr;
 }
 
 llvm::Value* LLVMGen::visit(MIRCastInstruction *node){
-    auto operand = visit(node->operand.get());
-    auto targetType = TypeTranslate::toLlvmType(node->targetType.get(), *context);
-    auto operandType = operand->getType();
-    // TODO: 実装
-    return nullptr;
+    llvm::Value* operand = visit(node->operand.get());
+    if(!operand){
+        errorHandler.errorReg("Cast operand not generated", 0);
+        return nullptr;
+    }
+
+    llvm::Type* targetType = TypeTranslate::toLlvmType(node->targetType.get(), *context);
+    if(!targetType){
+        errorHandler.errorReg("Failed to translate cast target type", 0);
+        return nullptr;
+    }
+
+    llvm::Type* operandType = operand->getType();
+    llvm::Value* castVal = nullptr;
+
+    if(operandType->isIntegerTy()){
+        if(targetType->isIntegerTy()) castVal = builder->CreateIntCast(operand, targetType, true, "casttmp");
+        else if(targetType->isFloatingPointTy()) castVal = builder->CreateSIToFP(operand, targetType, "casttmp");
+        else if(targetType->isPointerTy()) castVal = builder->CreateIntToPtr(operand, targetType, "inttoptrtmp");
+    } else if(operandType->isFloatingPointTy()){
+        if(targetType->isIntegerTy()) castVal = builder->CreateFPToSI(operand, targetType, "casttmp");
+        else if(targetType->isFloatingPointTy()) castVal = builder->CreateFPCast(operand, targetType, "casttmp");
+    } else if(operandType->isPointerTy()){
+        if(targetType->isPointerTy()) castVal = builder->CreatePointerCast(operand, targetType, "ptrcasttmp");
+        else if(targetType->isIntegerTy()) castVal = builder->CreatePtrToInt(operand, targetType, "ptrtointtmp");
+    }
+
+    if(!castVal){
+        errorHandler.errorReg("Unsupported cast from " + std::string(operandType->getTypeID() == llvm::Type::IntegerTyID ? "int" : "other")
+            + " to target", 0);
+        return nullptr;
+    }
+    if(node->result && node->result.get()){
+        valueMap[node->result.get()] = castVal;
+    }
+
+    return castVal;
 }
