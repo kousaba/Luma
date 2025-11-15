@@ -41,6 +41,7 @@ public:
         MulInstruction,
         DivInstruction,
         CmpInstruction,
+        GepInstruction,
     };
     NodeType nodeType;
     explicit MIRNode(NodeType type) : nodeType(type) {}

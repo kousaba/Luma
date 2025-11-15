@@ -28,7 +28,8 @@ typeAnnotation
     : COLON typeName
     ;
 typeName
-    : TYPE_INT64 | TYPE_INT32 | TYPE_CHAR
+    : typeName LBRACKET INTEGER RBRACKET
+    | TYPE_INT64 | TYPE_INT32 | TYPE_CHAR
     | TYPE_FLOAT64 | TYPE_FLOAT32
     ;
 assignmentStatement
@@ -60,6 +61,7 @@ forStatement
 primaryExpr
     : INTEGER
     | DECIMAL
+    | IDENTIFIER LBRACKET expr RBRACKET // 配列アクセス
     | functionCallExpr
     | LPAREN expr RPAREN
     | IDENTIFIER
@@ -91,4 +93,3 @@ comparisonExpr
 expr
     : comparisonExpr
     ;
-

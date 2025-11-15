@@ -50,6 +50,19 @@ public:
     }
 };
 
+// 配列参照を表すノード
+class ArrayRefNode : public ExprNode{
+public:
+    std::string name; // 配列名
+    std::shared_ptr<ExprNode> idx; // インデックス
+    std::shared_ptr<Symbol> symbol = nullptr;
+    ArrayRefNode(const std::string& arrName, std::shared_ptr<ExprNode> i) : name(arrName), idx(i) {}
+    void dump(int indent = 0) const override{
+        printIndent(indent);
+        std::cout << "ArrayRefNode (Name: " << name << ", Type: " << (type ? type->getTypeName() : "unknown") << ")" << std::endl;
+    }
+};
+
 // 二項演算子(例: a + b)を表すノード
 class BinaryOpNode : public ExprNode{
 public:

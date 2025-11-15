@@ -54,8 +54,10 @@ private:
     std::shared_ptr<TypeNode> visit(NumberLiteralNode *node);
     std::shared_ptr<TypeNode> visit(DecimalLiteralNode *node);
     std::shared_ptr<TypeNode> visit(VariableRefNode *node);
+    std::shared_ptr<TypeNode> visit(ArrayRefNode *node);
     std::shared_ptr<TypeNode> visit(CastNode *node);
     void visit(VarDeclNode *node);
+    void visit(ArrayDeclNode *node);
     std::shared_ptr<TypeNode> visit(ExprNode *node); // 振り分け用
     // 式以外
     void visit(FunctionDefNode *node);

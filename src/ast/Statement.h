@@ -63,6 +63,21 @@ public:
         std::cout << "}" << std::endl;
     }
 };
+// 配列宣言文
+class ArrayDeclNode : public StatementNode{
+public:
+    std::string arrayName;
+    std::shared_ptr<TypeNode> type; // 配列の型
+    size_t size;
+    std::shared_ptr<Symbol> symbol = nullptr;
+    ArrayDeclNode(const std::string& name, std::shared_ptr<TypeNode> t, size_t siz) : arrayName(name), type(t), size(siz) {}
+    void dump(int indent = 0) const override{
+        printIndent(indent);
+        std::cout << "ArrayDeclNode (Name: " << arrayName << ", Type: " << (type ? type->getTypeName() : "unknown") << ") {" << std::endl;
+        printIndent(indent);
+        std::cout << "}" << std::endl;
+    }
+};
 // 変数代入文を表すノード
 class AssignmentNode : public StatementNode{
 public:

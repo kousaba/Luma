@@ -14,7 +14,9 @@ class Scope;
 enum class SymbolKind{
     VAR,
     FUNC,
-    TYPE
+    TYPE,
+    ARRAY,
+    UNKNOWN
 };
 
 class Symbol{
@@ -38,6 +40,16 @@ public:
         : Symbol(name, SymbolKind::VAR, type, scope) {}
     void dump(std::ostream& os, int indent = 0) const override {
         os << std::string(indent, ' ') << "VarSymbol: " << name << " (Type: " << 
+        (type ? type->getTypeName() : "N/A") << ")";
+    }
+};
+
+class ArraySymbol : public Symbol{
+public:
+    ArraySymbol(const std::string& name, std::shared_ptr<TypeNode> type, std::shared_ptr<Scope> scope)
+        : Symbol(name, SymbolKind::ARRAY, type, scope) {}
+    void dump(std::ostream& os, int indent = 0) const override{
+        os << std::string(indent, ' ') << "ArraySymbol: " << name << " (Type: " <<
         (type ? type->getTypeName() : "N/A") << ")";
     }
 };

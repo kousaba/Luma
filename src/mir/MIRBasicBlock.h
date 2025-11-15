@@ -1,8 +1,7 @@
 #pragma once
 #include "mir/MIRNode.h"
 #include "mir/MIRInstruction.h"
-
-class MIRTerminatorInstruction; // Forward declaration
+#include "mir/MIRTerminator.h" // 完全な定義をインクルード
 
 // 基本ブロック
 class MIRBasicBlock : public MIRNode{
@@ -14,5 +13,14 @@ public:
     void addInstruction(std::shared_ptr<MIRInstruction> inst) {instructions.push_back(inst);}
     void setTerminator(std::shared_ptr<MIRTerminatorInstruction> term);
 
-    void dump(std::ostream& os, int indent = 0) const override;
+    void dump(std::ostream& os, int indent = 0) const override {
+        printMirIndent(indent);
+        os << name << ":" << std::endl;
+        for (const auto& inst : instructions) {
+            inst->dump(os, indent + 1);
+        }
+        if (terminator) {
+            terminator->dump(os, indent + 1);
+        }
+    }
 };

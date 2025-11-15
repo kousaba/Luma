@@ -52,9 +52,14 @@ llvm::Type* TypeTranslate::toLlvmType(MIRType* mirType, llvm::LLVMContext &conte
         case MIRType::TypeID::Ptr:
             // TODO: 型名をつけたポインタを返すようにする
             return llvm::PointerType::getInt8Ty(context);
-        case MIRType::TypeID::Array:
-            // 要素数がわかるようにsize_tでMIRノードに値を入れておく
-            return llvm::ArrayType::get(llvm::Type::getInt8Ty(context), 0);
+        case MIRType::TypeID::Array: {
+            llvm::Type* llvmElementType = toLlvmType(mirType->elementType.get(), context);
+            if (!llvmElementType) {
+                // エラーハンドリング
+                return llvm::Type::getVoidTy(context);
+            }
+            return llvm::ArrayType::get(llvmElementType, mirType->arraySize);
+        }
         case MIRType::TypeID::Function:
             // 詳細情報を入れる
             return llvm::FunctionType::get(llvm::Type::getVoidTy(context), false)->getPointerTo();
@@ -69,12 +74,52 @@ std::shared_ptr<MIRType> TypeTranslate::toMirType(TypeNode* typeNode){
         return std::make_shared<MIRType>(MIRType::TypeID::Void);
     }
     std::string typeName = typeNode->getTypeName();
+
+    // 配列型の場合の処理 (例: "int[5]")
+    size_t bracketPos = typeName.find('[');
+    if (bracketPos != std::string::npos) {
+        std::string baseTypeName = typeName.substr(0, bracketPos);
+        std::string sizeStr = typeName.substr(bracketPos + 1, typeName.length() - bracketPos - 2);
+        size_t arraySize = 0;
+        try {
+            arraySize = std::stoul(sizeStr);
+        } catch (const std::exception& e) {
+            // エラーハンドリング
+            return std::make_shared<MIRType>(MIRType::TypeID::Unknown);
+        }
+
+        // 配列の要素型を再帰的に取得
+        std::shared_ptr<MIRType> elemType = nullptr;
+        if(baseTypeName == "int") elemType = std::make_shared<MIRType>(MIRType::TypeID::Int, "int");
+        else if(baseTypeName == "i32") elemType = std::make_shared<MIRType>(MIRType::TypeID::Int, "i32");
+        else if(baseTypeName == "float") elemType = std::make_shared<MIRType>(MIRType::TypeID::Float, "float");
+        else if(baseTypeName == "f32") elemType = std::make_shared<MIRType>(MIRType::TypeID::Float, "f32");
+        else if(baseTypeName == "bool") elemType = std::make_shared<MIRType>(MIRType::TypeID::Bool, "bool");
+        else if(baseTypeName == "void") elemType = std::make_shared<MIRType>(MIRType::TypeID::Void, "void");
+
+        if (elemType) {
+            return std::make_shared<MIRType>(elemType, arraySize); // 配列型コンストラクタを使用
+        }
+    }
+
+    // 基本型の処理
     if(typeName == "int") return std::make_shared<MIRType>(MIRType::TypeID::Int, "int");
     if(typeName == "i32") return std::make_shared<MIRType>(MIRType::TypeID::Int, "i32");
     if(typeName == "float") return std::make_shared<MIRType>(MIRType::TypeID::Float, "float");
     if(typeName == "f32") return std::make_shared<MIRType>(MIRType::TypeID::Float, "f32");
     if(typeName == "bool") return std::make_shared<MIRType>(MIRType::TypeID::Bool, "bool");
     if(typeName == "void") return std::make_shared<MIRType>(MIRType::TypeID::Void, "void");
+
+    if(auto* arrayType = dynamic_cast<ArrayTypeNode*>(typeNode)){
+        auto elemType = toMirType(arrayType->arrType.get());
+        size_t size = arrayType->size;
+        return std::make_shared<MIRType>(elemType, size);
+    }
+    // ポインタ用?
+    // if(auto* ptrType = dynamic_cast<PointerTypeNode*>(typeNode)) {
+    //     auto pointeeType = toMirType(ptrType->pointeeType);
+    //     return std::make_shared<MIRType>(pointeeType);
+    // }
     return std::make_shared<MIRType>(MIRType::TypeID::Unknown);
 }
 

@@ -106,11 +106,20 @@ void LLVMGen::visit(MIRInstruction *node){
 
 void LLVMGen::visit(MIRAllocaInstruction *node){
     llvm::Type* allocType = TypeTranslate::toLlvmType(node->allocatedType.get(), *context);
-    llvm::Value* allocaVal = builder->CreateAlloca(
-        allocType,
-        nullptr,
-        node->varName
-    );
+    llvm::Value* allocaVal;
+    if(node->size > 0){
+        allocaVal = builder->CreateAlloca(
+            allocType,
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(*context), node->size),
+            node->varName
+        );
+    }else{
+        allocaVal = builder->CreateAlloca(
+            allocType,
+            nullptr,
+            node->varName
+        );
+    }
     MIRValue* mirResultValue = node->result.get();
     valueMap[mirResultValue] = allocaVal;
 }
@@ -212,6 +221,27 @@ void LLVMGen::visit(MIRConditionBranchInstruction *node){
     auto falseBlock = blockMap[node->falseBlock.get()];
     llvm::Value* cond = visit(node->condition.get());
     builder->CreateCondBr(cond, trueBlock, falseBlock);
+}
+
+llvm::Value* LLVMGen::visit(MIRGepInstruction *node){
+    llvm::Value* basePtr = valueMap[node->basePtr.get()];
+    llvm::Value* index = valueMap[node->index.get()];
+    if(!basePtr || !index){
+        errorHandler.errorReg("GEP instruction: invalid operands", 0);
+        return nullptr;
+    }
+    llvm::Type* elemType = TypeTranslate::toLlvmType(node->elementType.get(), *context);
+    if(!elemType){
+        errorHandler.errorReg("GEP instruction: invalid element type", 0);
+        return nullptr;
+    }
+    llvm::Value* gepResult = builder->CreateGEP(
+        elemType,
+        basePtr,
+        {index}
+    );
+    valueMap[node->result.get()] = gepResult;
+    return gepResult;
 }
 
 llvm::Value* LLVMGen::visit(MIRValue *node){

@@ -54,6 +54,7 @@ private:
     void visit(BlockNode* node);
     void visit(FunctionDefNode* node);
     void visit(VarDeclNode* node);
+    void visit(ArrayDeclNode *node);
     void visit(AssignmentNode* node);
     void visit(IfNode* node);
     void visit(ForNode* node);
@@ -64,6 +65,7 @@ private:
     std::shared_ptr<MIRValue> visit(NumberLiteralNode* node);
     std::shared_ptr<MIRValue> visit(DecimalLiteralNode* node);
     std::shared_ptr<MIRValue> visit(VariableRefNode* node);
+    std::shared_ptr<MIRValue> visit(ArrayRefNode *node);
     std::shared_ptr<MIRValue> visit(BinaryOpNode* node);
     std::shared_ptr<MIRValue> visit(FunctionCallNode* node);
     std::shared_ptr<MIRValue> visit(CastNode* node);

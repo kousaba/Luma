@@ -71,7 +71,7 @@ void SemanticAnalysis::visit(VarDeclNode *node){
         errorHandler.errorReg("Variable '" + node->varName + "' already defined in this scope.", 0);
         return;
     }
-    auto varType = node->type; // Can be null if not specified
+    auto varType = node->type; 
 
     if(node->initializer){
         auto initType = visit(node->initializer.get());
@@ -80,10 +80,10 @@ void SemanticAnalysis::visit(VarDeclNode *node){
             return;
         }
 
-        if (!varType) { // Type is not specified, so infer it
+        if (!varType) {
             varType = initType;
-            node->type = initType; // Also update the AST node itself
-        } else if (varType->getTypeName() != initType->getTypeName()) { // Type is specified, check for mismatch
+            node->type = initType;
+        } else if (varType->getTypeName() != initType->getTypeName()) {
             errorHandler.errorReg("Initializer type mismatch for variable '" + node->varName + "'.", 0);
         }
     }
@@ -96,6 +96,18 @@ void SemanticAnalysis::visit(VarDeclNode *node){
     auto varSymbol = std::make_shared<VarSymbol>(node->varName, varType, currentScope);
     currentScope->define(varSymbol);
     node->symbol = varSymbol;
+}
+
+void SemanticAnalysis::visit(ArrayDeclNode *node){
+    if(currentScope->lookupCurrent(node->arrayName)){
+        errorHandler.errorReg("Array '" + node->arrayName + "' already defined in this scope.", 0);
+        return;
+    }
+    auto arrayType = node->type;
+    // TODO: 初期化式
+    auto arraySymbol = std::make_shared<ArraySymbol>(node->arrayName, arrayType, currentScope);
+    currentScope->define(arraySymbol);
+    node->symbol = arraySymbol;
 }
 
 std::shared_ptr<TypeNode> SemanticAnalysis::visit(BinaryOpNode *node){
@@ -121,6 +133,9 @@ std::shared_ptr<TypeNode> SemanticAnalysis::visit(BinaryOpNode *node){
 
 std::shared_ptr<TypeNode> SemanticAnalysis::visit(FunctionCallNode *node){
     auto symbol = currentScope->lookup(node->calleeName);
+    if(node->calleeName == "input" || node->calleeName == "print"){
+        return nullptr;
+    }
     if(!symbol){
         errorHandler.errorReg("Function '" + node->calleeName + "' not defined.", 0);
         return nullptr;
@@ -185,6 +200,20 @@ std::shared_ptr<TypeNode> SemanticAnalysis::visit(VariableRefNode *node){
     }
     if(symbol->kind != SymbolKind::VAR){
         errorHandler.errorReg("'" + node->name + "' is not a variable.", 0);
+        return nullptr;
+    }
+    node->symbol = symbol;
+    node->type = symbol->type;
+    return symbol->type;
+}
+std::shared_ptr<TypeNode> SemanticAnalysis::visit(ArrayRefNode *node){
+    auto symbol = currentScope->lookup(node->name);
+    if(!symbol){
+        errorHandler.errorReg("Array '" + node->name + "' not defined.", 0);
+        return nullptr;
+    }
+    if(symbol->kind != SymbolKind::ARRAY){
+        errorHandler.errorReg("'" + node->name + "' is not a array.", 0);
         return nullptr;
     }
     node->symbol = symbol;
@@ -327,6 +356,7 @@ void SemanticAnalysis::visit(StatementNode *node){
     if(auto cnode = dynamic_cast<VarDeclNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<AssignmentNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<ExprStatementNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<ArrayDeclNode*>(node)) return visit(cnode);
     else{
         errorHandler.compilerErrorReg(CompilerErrorCode::STMT_VISIT_COULDNOT_CAST, {std::string(typeid(*node).name())});
     }

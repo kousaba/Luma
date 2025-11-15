@@ -34,18 +34,7 @@ void MIRConditionBranchInstruction::dump(std::ostream& os, int indent) const {
     os << ", label %" << trueBlock->name << ", label %" << falseBlock->name << std::endl;
 }
 
-// MIRBasicBlock の setTerminator と dump の実装
+// MIRBasicBlock の setTerminator の実装
 void MIRBasicBlock::setTerminator(std::shared_ptr<MIRTerminatorInstruction> term) {
     terminator = term;
-}
-
-void MIRBasicBlock::dump(std::ostream& os, int indent) const {
-    printMirIndent(indent);
-    os << name << ":" << std::endl;
-    for (const auto& inst : instructions) {
-        inst->dump(os, indent + 1);
-    }
-    if (terminator) {
-        terminator->dump(os, indent + 1);
-    }
 }

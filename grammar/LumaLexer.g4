@@ -38,6 +38,8 @@ LPAREN: '(';
 RPAREN: ')';
 LBRACE: '{';
 RBRACE: '}';
+LBRACKET: '[';
+RBRACKET: ']';
 // リテラル
 fragment DIGITS : '0'..'9'+;
 DECIMAL: [+-]?DIGITS+'.'DIGITS+;

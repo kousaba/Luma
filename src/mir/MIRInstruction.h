@@ -57,8 +57,9 @@ class MIRAllocaInstruction : public MIRInstruction{
 public: 
     std::shared_ptr<MIRType> allocatedType; // 割り当てるメモリの型
     std::string varName; // 変数名 (デバッグ用)
-    explicit MIRAllocaInstruction(std::shared_ptr<MIRType> typeToAlloc, const std::string& name, std::shared_ptr<MIRType> resultPtrType, const std::string& resultName = "")
-        : MIRInstruction(NodeType::AllocaInstruction, resultPtrType, resultName), allocatedType(typeToAlloc), varName(name) {}
+    size_t size;
+    explicit MIRAllocaInstruction(std::shared_ptr<MIRType> typeToAlloc, const std::string& name, std::shared_ptr<MIRType> resultPtrType, const std::string& resultName = "", size_t siz = 0)
+        : MIRInstruction(NodeType::AllocaInstruction, resultPtrType, resultName), allocatedType(typeToAlloc), varName(name), size(siz) {}
 
     void dump(std::ostream& os, int indent = 0) const override {
         printMirIndent(indent);
@@ -175,6 +176,35 @@ public:
         operand->dump(os);
         os << " to ";
         targetType->dump(os);
+        os << std::endl;
+    }
+};
+
+// GEP命令
+class MIRGepInstruction : public MIRInstruction{
+public:
+    std::shared_ptr<MIRValue> basePtr;
+    std::shared_ptr<MIRValue> index;
+    std::shared_ptr<MIRType> elementType;
+    
+    explicit MIRGepInstruction(
+        std::shared_ptr<MIRValue> base,
+        std::shared_ptr<MIRValue> idx,
+        std::shared_ptr<MIRType> elemType,
+        const std::string& resultName
+    ) : MIRInstruction(NodeType::GepInstruction, elemType, resultName),
+        basePtr(base), 
+        index(idx), 
+        elementType(elemType) {}
+    
+    void dump(std::ostream& os, int indent = 0) const override {
+        printMirIndent(indent);
+        if (result) { result->dump(os); os << " = "; }
+        os << "getelementptr " << elementType->name 
+            << ", ptr ";
+        basePtr->dump(os);
+        os << ", ";
+        index->dump(os);
         os << std::endl;
     }
 };

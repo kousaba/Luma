@@ -17,7 +17,26 @@ public:
     };
     TypeID id; // 型の識別子
     std::string name; // 型名("int", "float", "i32", "f32"など)
+    // 指す先の型
+    std::shared_ptr<MIRType> pointeeType;
+    // 配列用: 要素の型とサイズ
+    std::shared_ptr<MIRType> elementType;
+    size_t arraySize = 0;
+    // 構造体用: メンバ情報
+    std::vector<std::shared_ptr<MIRType>> memberTypes;
+    std::vector<std::string> memberNames;
+    // 変数用
     explicit MIRType(TypeID typeId, const std::string& typeName = "") : MIRNode(NodeType::Type), id(typeId), name(typeName){}
+    // ポインタ型用
+    MIRType(std::shared_ptr<MIRType> pointee)
+        : MIRNode(NodeType::Type), id(TypeID::Ptr), pointeeType(pointee){
+        name = pointee->name + "*";
+    }
+    // 配列型用
+    MIRType(std::shared_ptr<MIRType> elemType, size_t size)
+        : MIRNode(NodeType::Type), id(TypeID::Array), elementType(elemType), arraySize(size){
+        name = elemType->name + "[" + std::to_string(size) + "]";
+    }
     bool isInteger() const {return id == TypeID::Int;}
     bool isFloat() const {return id == TypeID::Float;}
     bool isPointer() const {return id == TypeID::Ptr;}

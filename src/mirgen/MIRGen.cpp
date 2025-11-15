@@ -1,5 +1,6 @@
 #include "mirgen/MIRGen.h" // インクルードパス変更
 #include "ast/Definition.h"
+#include "ast/Statement.h"
 #include "common/Global.h"
 #include "mir/MIRFunction.h"
 #include "mir/MIRInstruction.h"
@@ -90,7 +91,7 @@ void MIRGen::visit(StatementNode* node) { // クラス名変更
     else if (auto forNode = dynamic_cast<ForNode*>(node)) visit(forNode);
     else if (auto exprStmtNode = dynamic_cast<ExprStatementNode*>(node)) visit(exprStmtNode);
     else if (auto returnNode = dynamic_cast<ReturnNode*>(node)) visit(returnNode);
-    
+    else if (auto arrayNode = dynamic_cast<ArrayDeclNode*>(node)) visit(arrayNode);
     else 
         errorHandler.errorReg("Unknown Statement visited in MIRGen.", 0);
 }
@@ -185,6 +186,29 @@ void MIRGen::visit(VarDeclNode* node) {
             currentBlock->addInstruction(storeInst);
         }
     }
+}
+
+void MIRGen::visit(ArrayDeclNode *node){
+    auto arrMirType = TypeTranslate::toMirType(node->type.get());
+    if(!arrMirType || arrMirType->id == MIRType::TypeID::Unknown){
+        return;
+    }
+    auto entryBlock = currentFunction->basicBlocks.front();
+    auto ptrType = std::make_shared<MIRType>(MIRType::TypeID::Ptr, arrMirType->name + "*");
+    auto allocaInst = std::make_shared<MIRAllocaInstruction>(
+        arrMirType, node->arrayName, ptrType, newRegisterName(), node->size
+    );
+
+    entryBlock->instructions.insert(entryBlock->instructions.begin(), allocaInst);
+    
+    auto symbol = node->symbol;
+    if(symbol){
+        symbolValueMap[symbol] = allocaInst->result;
+    }else{
+        errorHandler.errorReg("Symbol not attached to ArrayDeclNode for: " + node->arrayName, 0);
+        return;
+    }
+    // TODO: 初期化式(配列リテラルを作ってから)
 }
 
 void MIRGen::visit(AssignmentNode* node) {
@@ -305,6 +329,40 @@ std::shared_ptr<MIRValue> MIRGen::visit(VariableRefNode* node) {
     }
     std::shared_ptr<MIRValue> varAddress = symbolValueMap[symbol];
     auto loadInst = std::make_shared<MIRLoadInstruction>(varAddress, TypeTranslate::toMirType(node->type.get()), newRegisterName());
+    currentBlock->addInstruction(loadInst);
+    return loadInst->result;
+}
+
+std::shared_ptr<MIRValue> MIRGen::visit(ArrayRefNode *node){
+    auto symbol = node->symbol;
+    if (!symbol || !symbolValueMap.count(symbol)) {
+        errorHandler.errorReg("Undefined variable reference: " + node->name, 0);
+        return nullptr;
+    }
+    std::shared_ptr<MIRValue> arrayAddress = symbolValueMap[symbol];
+    std::shared_ptr<MIRValue> indexValue = nullptr;
+    if(auto* numLit = dynamic_cast<NumberLiteralNode*>(node->idx.get())){
+        indexValue = visit(numLit);
+    }else{
+        indexValue = visit(node->idx.get());
+    }
+    if(!indexValue){
+        errorHandler.errorReg("Invalid array index expression.", 0);
+        return nullptr;
+    }
+    auto elementType = TypeTranslate::toMirType(node->type.get());
+    auto gepInst = std::make_shared<MIRGepInstruction>(
+        arrayAddress,
+        indexValue,
+        elementType,
+        newRegisterName()
+    );
+    currentBlock->addInstruction(gepInst);
+    auto loadInst = std::make_shared<MIRLoadInstruction>(
+        gepInst->result,
+        elementType,
+        newRegisterName()
+    );
     currentBlock->addInstruction(loadInst);
     return loadInst->result;
 }
