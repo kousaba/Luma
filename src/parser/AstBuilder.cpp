@@ -7,6 +7,8 @@
 #include "../ast/Statement.h"
 #include "../ast/Definition.h"
 #include "common/Global.h"
+#include "types/Type.h"
+#include "types/TypeTranslate.h"
 #include <cstddef>
 #include <iostream> // デバッグ用
 
@@ -56,13 +58,25 @@ antlrcpp::Any AstBuilder::visitBlock(Luma::LumaParser::BlockContext *ctx){
 antlrcpp::Any AstBuilder::visitFunctionDefinition(Luma::LumaParser::FunctionDefinitionContext *ctx){
     std::string funcName = ctx->IDENTIFIER()->getText();
     std::vector<std::string> args;
-    if(ctx->parameterList()) for(const auto& argCtx : ctx->parameterList()->IDENTIFIER()) args.push_back(argCtx->getText());
+    std::vector<std::string> argTypesStr;
+    if(ctx->parameterList()){
+        for(const auto& argCtx : ctx->parameterList()->parameter()){
+            args.push_back(argCtx->IDENTIFIER()->getText());
+            argTypesStr.push_back(argCtx->typeAnnotation()->typeName()->getText());
+        }
+    }
+    std::vector<std::shared_ptr<TypeNode>> argTypes;
+    for(const auto& argType : argTypesStr) argTypes.push_back(TypeTranslate::toTypeNode(argType));
     std::shared_ptr<BlockNode> body = std::any_cast<std::shared_ptr<BlockNode>>(visitBlock(ctx->block()));
-    auto node = std::make_shared<FunctionDefNode>(funcName, args, body);
+    std::shared_ptr<TypeNode> returnType = TypeTranslate::toTypeNode(ctx->typeName()->getText());
+    auto node = std::make_shared<FunctionDefNode>(funcName, args, argTypes, body, returnType);
     antlrcpp::Any result = std::shared_ptr<StatementNode>(node);
     return result;
 }
 antlrcpp::Any AstBuilder::visitParameterList(Luma::LumaParser::ParameterListContext *ctx){
+    return nullptr;
+}
+antlrcpp::Any AstBuilder::visitParameter(Luma::LumaParser::ParameterContext *ctx){
     return nullptr;
 }
 antlrcpp::Any AstBuilder::visitReturnStatement(Luma::LumaParser::ReturnStatementContext *ctx){

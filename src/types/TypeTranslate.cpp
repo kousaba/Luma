@@ -1,5 +1,6 @@
 #include "TypeTranslate.h"
 #include "mir/MIRType.h"
+#include "types/Type.h"
 #include <llvm-18/llvm/IR/DerivedTypes.h>
 #include <llvm-18/llvm/IR/IRBuilder.h>
 #include <memory>
@@ -63,7 +64,7 @@ llvm::Type* TypeTranslate::toLlvmType(MIRType* mirType, llvm::LLVMContext &conte
     }
 }
 
-std::shared_ptr<MIRType> toMirType(TypeNode* typeNode){
+std::shared_ptr<MIRType> TypeTranslate::toMirType(TypeNode* typeNode){
     if(!typeNode){
         return std::make_shared<MIRType>(MIRType::TypeID::Void);
     }
@@ -75,4 +76,11 @@ std::shared_ptr<MIRType> toMirType(TypeNode* typeNode){
     if(typeName == "bool") return std::make_shared<MIRType>(MIRType::TypeID::Bool, "bool");
     if(typeName == "void") return std::make_shared<MIRType>(MIRType::TypeID::Void, "void");
     return std::make_shared<MIRType>(MIRType::TypeID::Unknown);
+}
+
+std::shared_ptr<TypeNode> TypeTranslate::toTypeNode(const std::string& typeName){
+    if(typeName == "int" || typeName == "i32" || typeName == "char" || 
+       typeName == "float" || typeName == "f32" || typeName == "bool" ||
+       typeName == "void") return std::make_shared<BasicTypeNode>(typeName);
+    return nullptr;
 }

@@ -9,4 +9,5 @@ public:
     static llvm::Type* toLlvmType(TypeNode* type, llvm::LLVMContext& context);
     static llvm::Type* toLlvmType(MIRType* mirType, llvm::LLVMContext& context);
     static std::shared_ptr<MIRType> toMirType(TypeNode* type);
+    static std::shared_ptr<TypeNode> toTypeNode(const std::string& typeName);
 };

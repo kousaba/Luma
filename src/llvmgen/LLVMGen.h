@@ -40,6 +40,7 @@ private:
     void visit(MIRReturnInstruction *node);
     void visit(MIRBranchInstruction *node);
     void visit(MIRConditionBranchInstruction *node);
+    void visit(MIRCallInstruction *node);
     llvm::Value* visit(MIRValue *node);
     llvm::Value* visit(MIRLiteralValue *node);
     llvm::Value* visit(MIRCastInstruction *node);

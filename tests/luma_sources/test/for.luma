@@ -1,0 +1,7 @@
+fn main() = int{
+    var a = 5;
+    for a > 1{
+        a = a - 1;
+    }
+    return add(1,4);
+}

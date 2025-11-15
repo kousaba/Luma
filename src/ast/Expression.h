@@ -76,6 +76,7 @@ class FunctionCallNode : public ExprNode{
 public:
     std::string calleeName; // 関数名
     std::vector<std::shared_ptr<ExprNode>> args; // 引数リスト
+    std::shared_ptr<FuncSymbol> symbol = nullptr; // 関数シンボル
     FunctionCallNode(const std::string& name, std::vector<std::shared_ptr<ExprNode>> arguments) : calleeName(name), args(arguments) {}
     void dump(int indent = 0) const override {
         printIndent(indent);

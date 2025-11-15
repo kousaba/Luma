@@ -45,7 +45,6 @@ private:
     std::string newRegisterName(); // 新しい一時レジスタ名を生成
 
     // ヘルパー関数
-    std::shared_ptr<MIRType> translateType(TypeNode* typeNode); // ASTの型をMIRの型に変換
     void setCurrentBlock(std::shared_ptr<MIRBasicBlock> block); // 現在の基本ブロックを設定
     std::shared_ptr<MIRBasicBlock> createBasicBlock(const std::string& name); // 新しい基本ブロックを作成
 

@@ -83,7 +83,15 @@ public:
         printMirIndent(indent);
         result->dump(os);
         os << " = load ";
-        result->type->dump(os); // ロードされる値の型
+        
+        // pointer->type->name は "int*" のようになっているはずなので、'*'を取り除く
+        std::string pointeeType = pointer->type->name;
+        size_t starPos = pointeeType.rfind('*');
+        if (starPos != std::string::npos) {
+            pointeeType.erase(starPos);
+        }
+        os << pointeeType;
+
         os << ", ";
         pointer->dump(os); // ロード元ポインタ
         os << std::endl;
@@ -130,19 +138,40 @@ public:
     }
 };
 
+// キャスト命令のオペコード
+enum class CastOpcode {
+    SIToFP,   // 符号付き整数 -> 浮動小数点数
+    FPToSI,   // 浮動小数点数 -> 符号付き整数
+    IntCast,  // 整数同士のキャスト (bitcast, trunc, sext, zext)
+    FPCast,   // 浮動小数点数同士のキャスト
+    PtrToInt, // ポインタ -> 整数
+    IntToPtr, // 整数 -> ポインタ
+    PtrCast,  // ポインタ同士のキャスト
+};
+
 // キャスト命令
 class MIRCastInstruction : public MIRInstruction{
 public:
+    CastOpcode opcode;
     std::shared_ptr<MIRValue> operand; // キャスト対象のオペランド
     std::shared_ptr<MIRType> targetType; // キャスト先の型
-    explicit MIRCastInstruction(std::shared_ptr<MIRValue> val, std::shared_ptr<MIRType> target, std::shared_ptr<MIRType> resultType, const 
-std::string& resultName = "")
-        : MIRInstruction(NodeType::CastInstruction, resultType, resultName), operand(val), targetType(target) {}
+    explicit MIRCastInstruction(CastOpcode op, std::shared_ptr<MIRValue> val, std::shared_ptr<MIRType> target, const std::string& resultName = "")
+        : MIRInstruction(NodeType::CastInstruction, target, resultName), opcode(op), operand(val), targetType(target) {}
 
     void dump(std::ostream& os, int indent = 0) const override {
         printMirIndent(indent);
         result->dump(os);
-        os << " = sitofp "; // 注意: これは簡略化されたキャストタイプ。オペランドとターゲットによって異なる
+        os << " = ";
+        switch(opcode) {
+            case CastOpcode::SIToFP: os << "sitofp"; break;
+            case CastOpcode::FPToSI: os << "fptosi"; break;
+            case CastOpcode::IntCast: os << "intcast"; break;
+            case CastOpcode::FPCast: os << "fpcast"; break;
+            case CastOpcode::PtrToInt: os << "ptrtoint"; break;
+            case CastOpcode::IntToPtr: os << "inttoptr"; break;
+            case CastOpcode::PtrCast: os << "ptrcast"; break;
+        }
+        os << " ";
         operand->dump(os);
         os << " to ";
         targetType->dump(os);

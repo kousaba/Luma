@@ -14,6 +14,7 @@ public:
     // func
     antlrcpp::Any visitFunctionDefinition(Luma::LumaParser::FunctionDefinitionContext *ctx) override;
     antlrcpp::Any visitParameterList(Luma::LumaParser::ParameterListContext *ctx) override;
+    antlrcpp::Any visitParameter(Luma::LumaParser::ParameterContext *ctx) override;
     // return
     antlrcpp::Any visitReturnStatement(Luma::LumaParser::ReturnStatementContext *ctx) override;
     // varDecl

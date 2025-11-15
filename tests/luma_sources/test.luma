@@ -1,4 +1,0 @@
-var a: int = 5;
-for a > 5{
-    var b: int = 3;
-}

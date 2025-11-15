@@ -24,7 +24,6 @@
 #include "common/ErrorHandler.h"
 #include "parser/AstBuilder.h"
 #include "ast/Statement.h"
-#include "codegen/CodeGen.h"
 #include "semantic/SemanticAnalysis.h"
 #include "common/Global.h"
 #include "llvmgen/LLVMGen.h"
@@ -97,7 +96,7 @@ int main(int argc, char* argv[]){
 
         // セマンティック解析
         SemanticAnalysis semanticAnalysis;
-        semanticAnalysis.visit(programNode.get());
+        semanticAnalysis.analyze(programNode);
         if (semanticAnalysis.hasErrors()) {
             errorHandler.printAllErrors();
             return 1;

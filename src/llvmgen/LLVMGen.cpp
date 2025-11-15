@@ -60,6 +60,16 @@ void LLVMGen::visit(MIRFunction *node){
         module.get()
     );
 
+    // 引数のマッピングを追加
+    auto mirArgs = node->arguments.begin();
+    auto llvmArgs = llvmFunc->arg_begin();
+    while (mirArgs != node->arguments.end() && llvmArgs != llvmFunc->arg_end()) {
+        valueMap[mirArgs->get()] = &(*llvmArgs);
+        llvmArgs->setName((*mirArgs)->name);
+        mirArgs++;
+        llvmArgs++;
+    }
+
     currentFunction = llvmFunc;
 
     for(auto& block : node->basicBlocks){
@@ -90,6 +100,7 @@ void LLVMGen::visit(MIRInstruction *node){
     if(auto binaryInst = dynamic_cast<MIRBinaryInstruction*>(node)) return visit(binaryInst);
     if(auto unaryInst = dynamic_cast<MIRUnaryInstruction*>(node)) return visit(unaryInst);
     if(auto castInst = dynamic_cast<MIRCastInstruction*>(node)) {visit(castInst); return;}
+    if(auto callInst = dynamic_cast<MIRCallInstruction*>(node)) return visit(callInst);
     errorHandler.errorReg("Unhandled MIRInstruction type: " + std::string(typeid(*node).name()), 0);
 }
 
@@ -141,12 +152,12 @@ void LLVMGen::visit(MIRBinaryInstruction *node){
         if(node->opcode == "sub") resultValue = builder->CreateFSub(left, right, "fsubtmp");
         if(node->opcode == "mul") resultValue = builder->CreateFMul(left, right, "fmultmp");
         if(node->opcode == "div") resultValue = builder->CreateFDiv(left,right, "fdivtmp");
-        if(node->opcode == "icmp eq") resultValue = builder->CreateFCmpOEQ(left, right, "feqtmp");
-        if(node->opcode == "icmp ne") resultValue = builder->CreateFCmpONE(left, right, "fnetmp");
-        if(node->opcode == "icmp lt") resultValue = builder->CreateFCmpOLT(left, right, "flttmp");
-        if(node->opcode == "icmp gt") resultValue = builder->CreateFCmpOGT(left, right, "fgttmp");
-        if(node->opcode == "icmp le") resultValue = builder->CreateFCmpOLE(left, right, "fletmp");
-        if(node->opcode == "icmp ge") resultValue = builder->CreateFCmpOGE(left, right, "fgetmp");
+        if(node->opcode == "fcmp eq") resultValue = builder->CreateFCmpOEQ(left, right, "feqtmp");
+        if(node->opcode == "fcmp ne") resultValue = builder->CreateFCmpONE(left, right, "fnetmp");
+        if(node->opcode == "fcmp lt") resultValue = builder->CreateFCmpOLT(left, right, "flttmp");
+        if(node->opcode == "fcmp gt") resultValue = builder->CreateFCmpOGT(left, right, "fgttmp");
+        if(node->opcode == "fcmp le") resultValue = builder->CreateFCmpOLE(left, right, "fletmp");
+        if(node->opcode == "fcmp ge") resultValue = builder->CreateFCmpOGE(left, right, "fgetmp");
     }
     if(resultValue){
         valueMap[node->result.get()] = resultValue;
@@ -204,11 +215,12 @@ void LLVMGen::visit(MIRConditionBranchInstruction *node){
 }
 
 llvm::Value* LLVMGen::visit(MIRValue *node){
+    if(valueMap.count(node)) return valueMap[node];
+
     if(auto literal = dynamic_cast<MIRLiteralValue*>(node)) return visit(literal);
     if(auto cast = dynamic_cast<MIRCastInstruction*>(node)) return visit(cast);
 
-    if(valueMap.count(node)) return valueMap[node];
-    errorHandler.errorReg("Count not fin or generate LLVM value for MIRValue.", 0);
+    errorHandler.errorReg("Could not find or generate LLVM value for MIRValue.", 0);
     return nullptr;
 }
 
@@ -295,4 +307,24 @@ llvm::Value* LLVMGen::visit(MIRCastInstruction *node){
     }
 
     return castVal;
+}
+
+void LLVMGen::visit(MIRCallInstruction *node) {
+    llvm::Function* calleeFunc = module->getFunction(node->calleeName);
+    if (!calleeFunc) {
+        // TODO: printf/scanfのような外部関数をここで宣言する
+        errorHandler.errorReg("LLVMGen: Function " + node->calleeName + " not found in module.", 0);
+        return;
+    }
+
+    std::vector<llvm::Value*> llvmArgs;
+    for (const auto& arg : node->arguments) {
+        llvmArgs.push_back(visit(arg.get()));
+    }
+
+    llvm::Value* callResult = builder->CreateCall(calleeFunc, llvmArgs, "calltmp");
+
+    if (node->result) {
+        valueMap[node->result.get()] = callResult;
+    }
 }

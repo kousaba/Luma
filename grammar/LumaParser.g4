@@ -36,10 +36,13 @@ assignmentStatement
     ;
 
 functionDefinition
-    : FN IDENTIFIER '(' parameterList? ')' block
+    : FN IDENTIFIER '(' parameterList? ')' EQ typeName block
     ;
 parameterList
-    : IDENTIFIER (COMMA IDENTIFIER)*
+    : (parameter ',')* parameter
+    ;
+parameter
+    : IDENTIFIER typeAnnotation
     ;
 returnStatement
     : RETURN expr? SEMI
