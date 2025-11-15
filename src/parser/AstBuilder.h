@@ -29,6 +29,7 @@ public:
     antlrcpp::Any visitConditionForStatement(Luma::LumaParser::ConditionForStatementContext *ctx) override;
     
     // expr
+    antlrcpp::Any visitArrayLiteral(Luma::LumaParser::ArrayLiteralContext *ctx) override;
     antlrcpp::Any visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx) override;
     antlrcpp::Any visitCastExpr(Luma::LumaParser::CastExprContext *ctx) override;
     antlrcpp::Any visitFunctionCallExpr(Luma::LumaParser::FunctionCallExprContext *ctx) override;

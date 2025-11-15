@@ -59,6 +59,7 @@ std::shared_ptr<TypeNode> SemanticAnalysis::visit(ExprNode *node){
     if(auto cnode = dynamic_cast<CastNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<ArrayRefNode*>(node)) return visit(cnode);
+    if(auto cnode = dynamic_cast<ArrayLiteralNode*>(node)) return visit(cnode); // 追加
     else{
         // errorHandler.errorReg("SemanticAnalysis::visit(ExprNode *node) failed to find correct type.", -1);
         errorHandler.compilerErrorReg(CompilerErrorCode::EXPR_VISIT_COULDNOT_CAST, {std::string(typeid(*node).name())});
@@ -93,9 +94,15 @@ void SemanticAnalysis::visit(VarDeclNode *node){
         return;
     }
 
-    auto varSymbol = std::make_shared<VarSymbol>(node->varName, varType, currentScope);
-    currentScope->define(varSymbol);
-    node->symbol = varSymbol;
+    if (dynamic_cast<ArrayTypeNode*>(varType.get())) {
+        auto arraySymbol = std::make_shared<ArraySymbol>(node->varName, varType, currentScope);
+        currentScope->define(arraySymbol);
+        node->symbol = arraySymbol;
+    } else {
+        auto varSymbol = std::make_shared<VarSymbol>(node->varName, varType, currentScope);
+        currentScope->define(varSymbol);
+        node->symbol = varSymbol;
+    }
 }
 
 void SemanticAnalysis::visit(ArrayDeclNode *node){
@@ -264,6 +271,33 @@ std::shared_ptr<TypeNode> SemanticAnalysis::visit(CastNode *node){
         return nullptr;
     }
     // TODO: 有効なキャストか確かめる処理
+    return node->type;
+}
+
+std::shared_ptr<TypeNode> SemanticAnalysis::visit(ArrayLiteralNode *node){
+    if(node->elem.empty()){
+        // 警告: 配列リテラルの中身がからです。　的な
+        return node->type;
+    }
+    // 最初の要素の型を基準にして一致しているか確かめる
+    std::shared_ptr<TypeNode> firstElementType = visit(node->elem[0].get());
+    if(!firstElementType){
+        return nullptr;
+    }
+    for(size_t i = 1;i < node->elem.size();i++){
+        auto elementType = visit(node->elem[i].get());
+        if(elementType->getTypeName() != firstElementType->getTypeName()){
+            // TODO: エラー: 配列リテラルの要素の型が一致していません。
+            return nullptr;
+        }
+    }
+    auto basicElementType = std::dynamic_pointer_cast<BasicTypeNode>(firstElementType);
+    if(!basicElementType){
+        // エラー: 配列の要素は基本型である必要があります
+        return nullptr;
+    }
+    std::string arrayTypeName = basicElementType->getTypeName() + "[" + std::to_string(node->elem.size()) + "]";
+    node->type = std::make_shared<ArrayTypeNode>(arrayTypeName, node->elem.size(), basicElementType);
     return node->type;
 }
 

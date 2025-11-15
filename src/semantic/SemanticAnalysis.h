@@ -56,6 +56,7 @@ private:
     std::shared_ptr<TypeNode> visit(VariableRefNode *node);
     std::shared_ptr<TypeNode> visit(ArrayRefNode *node);
     std::shared_ptr<TypeNode> visit(CastNode *node);
+    std::shared_ptr<TypeNode> visit(ArrayLiteralNode *node);
     void visit(VarDeclNode *node);
     void visit(ArrayDeclNode *node);
     std::shared_ptr<TypeNode> visit(ExprNode *node); // 振り分け用

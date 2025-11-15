@@ -64,6 +64,7 @@ private:
     std::shared_ptr<MIRValue> visit(ExprNode* node);
     std::shared_ptr<MIRValue> visit(NumberLiteralNode* node);
     std::shared_ptr<MIRValue> visit(DecimalLiteralNode* node);
+    std::shared_ptr<MIRValue> visit(ArrayLiteralNode *node);
     std::shared_ptr<MIRValue> visit(VariableRefNode* node);
     std::shared_ptr<MIRValue> visit(ArrayRefNode *node);
     std::shared_ptr<MIRValue> visit(BinaryOpNode* node);

@@ -22,7 +22,7 @@ block
     ;
 
 varDecl
-    : (VAR | LET) IDENTIFIER typeAnnotation? (EQ expr)? SEMI
+    : (VAR | LET) IDENTIFIER typeAnnotation? (EQ (expr | arrayLiteral))? SEMI
     ;
 typeAnnotation
     : COLON typeName
@@ -56,11 +56,16 @@ forStatement
     : FOR expr block # ConditionForStatement
     ;
 
+arrayLiteral
+    : LBRACKET (expr (COMMA expr)*)? RBRACKET // [expr, expr,...]
+    ;
+
 // 式ルール
 // プライマリ式: 式の最小単位(数値リテラルなど)
 primaryExpr
     : INTEGER
     | DECIMAL
+    | arrayLiteral
     | IDENTIFIER LBRACKET expr RBRACKET // 配列アクセス
     | functionCallExpr
     | LPAREN expr RPAREN

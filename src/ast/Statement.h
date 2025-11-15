@@ -69,11 +69,17 @@ public:
     std::string arrayName;
     std::shared_ptr<TypeNode> type; // 配列の型
     size_t size;
+    std::shared_ptr<ExprNode> initializer = nullptr; // 初期化式
     std::shared_ptr<Symbol> symbol = nullptr;
     ArrayDeclNode(const std::string& name, std::shared_ptr<TypeNode> t, size_t siz) : arrayName(name), type(t), size(siz) {}
     void dump(int indent = 0) const override{
         printIndent(indent);
         std::cout << "ArrayDeclNode (Name: " << arrayName << ", Type: " << (type ? type->getTypeName() : "unknown") << ") {" << std::endl;
+        if (initializer) {
+            printIndent(indent + 1);
+            std::cout << "Initializer: " << std::endl;
+            initializer->dump(indent + 2);
+        }
         printIndent(indent);
         std::cout << "}" << std::endl;
     }

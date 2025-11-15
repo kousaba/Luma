@@ -37,6 +37,21 @@ public:
         std::cout << "DecimalLiteralNode (Value: " << value << ", Type: " << (type ? type->getTypeName() : "unknown") << ")" << std::endl;
     }
 };
+// 配列リテラルを表すノード
+class ArrayLiteralNode : public ExprNode{
+public:
+    std::vector<std::shared_ptr<ExprNode>> elem;
+    ArrayLiteralNode(std::vector<std::shared_ptr<ExprNode>> e) : elem(e){}
+    void dump(int indent = 0) const override{
+        printIndent(indent);
+        std::cout << "ArrayLiteralNoe (Value: \n\t";
+        for(auto&& i : elem){
+            printIndent(indent);
+            i->dump(indent + 1);
+        }
+        std::cout << ", Type: " << (type ? type->getTypeName() : "unknown") << ")" << std::endl;
+    }
+};
 
 // 変数参照を表すノード
 class VariableRefNode : public ExprNode{

@@ -1,5 +1,6 @@
 #include "mirgen/MIRGen.h" // インクルードパス変更
 #include "ast/Definition.h"
+#include "ast/Expression.h"
 #include "ast/Statement.h"
 #include "common/Global.h"
 #include "mir/MIRFunction.h"
@@ -180,10 +181,30 @@ void MIRGen::visit(VarDeclNode* node) {
     }
 
     if (node->initializer) {
-        std::shared_ptr<MIRValue> initValue = visit(node->initializer.get());
-        if (initValue) {
-            auto storeInst = std::make_shared<MIRStoreInstruction>(initValue, allocaInst->result);
-            currentBlock->addInstruction(storeInst);
+        if (auto arrayLit = dynamic_cast<ArrayLiteralNode*>(node->initializer.get())) {
+            // 配列リテラルによる初期化
+            for (size_t i = 0; i < arrayLit->elem.size(); ++i) {
+                auto indexValue = std::make_shared<MIRLiteralValue>(std::make_shared<MIRType>(MIRType::TypeID::Int, "int"), std::to_string(i));
+                auto gepInst = std::make_shared<MIRGepInstruction>(
+                    allocaInst->result,
+                    indexValue,
+                    TypeTranslate::toMirType(arrayLit->elem[i]->type.get()),
+                    varMirType,
+                    newRegisterName()
+                );
+                currentBlock->addInstruction(gepInst);
+                
+                std::shared_ptr<MIRValue> elementValue = visit(arrayLit->elem[i].get());
+                auto storeInst = std::make_shared<MIRStoreInstruction>(elementValue, gepInst->result);
+                currentBlock->addInstruction(storeInst);
+            }
+        } else {
+            // 通常の式による初期化
+            std::shared_ptr<MIRValue> initValue = visit(node->initializer.get());
+            if (initValue) {
+                auto storeInst = std::make_shared<MIRStoreInstruction>(initValue, allocaInst->result);
+                currentBlock->addInstruction(storeInst);
+            }
         }
     }
 }
@@ -320,6 +341,34 @@ std::shared_ptr<MIRValue> MIRGen::visit(NumberLiteralNode* node) {
 
 std::shared_ptr<MIRValue> MIRGen::visit(DecimalLiteralNode* node) {
     return std::make_shared<MIRLiteralValue>(TypeTranslate::toMirType(node->type.get()), std::to_string(node->value));
+}
+
+std::shared_ptr<MIRValue> MIRGen::visit(ArrayLiteralNode *node){
+    auto arrayType = TypeTranslate::toMirType(node->type.get());
+    auto elementType = TypeTranslate::toMirType(node->elem[0]->type.get());
+    size_t arraySize = node->elem.size();
+    // スタックに確保
+    auto arrayPtrType = std::make_shared<MIRType>(arrayType);
+    auto allocaInst = std::make_shared<MIRAllocaInstruction>(
+        arrayType, "arrayLit", arrayPtrType, newRegisterName(), arraySize
+    );
+    currentBlock->addInstruction(allocaInst);
+    std::shared_ptr<MIRValue> arrayPtr = allocaInst->result;
+    for(size_t i = 0;i < node->elem.size();i++){
+        auto indexValue = std::make_shared<MIRLiteralValue>(std::make_shared<MIRType>(MIRType::TypeID::Int, "int"), std::to_string(i));
+        auto gepInst = std::make_shared<MIRGepInstruction>(
+            arrayPtr,
+            indexValue,
+            elementType,
+            arrayType,
+            newRegisterName()
+        );
+        currentBlock->addInstruction(gepInst);
+        std::shared_ptr<MIRValue> elementValue = visit(node->elem[i].get());
+        auto storeInst = std::make_shared<MIRStoreInstruction>(elementValue, gepInst->result);
+        currentBlock->addInstruction(storeInst);
+    }
+    return arrayPtr;
 }
 
 std::shared_ptr<MIRValue> MIRGen::visit(VariableRefNode* node) {

@@ -91,35 +91,27 @@ antlrcpp::Any AstBuilder::visitReturnStatement(Luma::LumaParser::ReturnStatement
 }
 
 antlrcpp::Any AstBuilder::visitVarDecl(Luma::LumaParser::VarDeclContext *ctx) {
-    if(ctx->typeAnnotation() && ctx->typeAnnotation()->typeName()->LBRACKET()){
-        // 配列
-        std::string arrayName = ctx->IDENTIFIER()->getText();
-        std::shared_ptr<TypeNode> type = nullptr;
-        size_t size = std::stol(ctx->typeAnnotation()->typeName()->INTEGER()->getText());
-        // 型注釈は必ずある
-        std::string typeNameStr = ctx->typeAnnotation()->typeName()->getText();
-        type = std::make_shared<BasicTypeNode>(typeNameStr);
-        // 初期化式は今はない
-        auto node = std::make_shared<ArrayDeclNode>(arrayName, type, size);
-        return std::shared_ptr<StatementNode>(node);
-    }else{
-        // 変数
-        std::string varName = ctx->IDENTIFIER()->getText();
-        // まずポインタをnullptrで初期化
-        std::shared_ptr<ExprNode> init = nullptr;
-        std::shared_ptr<TypeNode> type = nullptr;
+    std::string varName = ctx->IDENTIFIER()->getText();
+    std::shared_ptr<TypeNode> type = nullptr;
+    std::shared_ptr<ExprNode> init = nullptr;
 
-        // 型注釈があれば、BasicTypeNodeを生成
-        if (ctx->typeAnnotation()) {
-            std::string typeNameStr = ctx->typeAnnotation()->typeName()->getText();
-            type = std::make_shared<BasicTypeNode>(typeNameStr);
-        }
-        // 初期化式があれば、visitしてExprNodeを取得
-        if (ctx->expr()) {
-            antlrcpp::Any initAny = visit(ctx->expr());
-            init = std::any_cast<std::shared_ptr<ExprNode>>(initAny);
-        }
-        // 1つのコンストラクタでVarDeclNodeを生成
+    if (ctx->typeAnnotation()) {
+        std::string typeNameStr = ctx->typeAnnotation()->typeName()->getText();
+        type = TypeTranslate::toTypeNode(typeNameStr);
+    }
+
+    if (ctx->expr()) {
+        init = std::any_cast<std::shared_ptr<ExprNode>>(visit(ctx->expr()));
+    } else if (ctx->arrayLiteral()) {
+        init = std::any_cast<std::shared_ptr<ExprNode>>(visit(ctx->arrayLiteral()));
+    }
+
+    if (dynamic_cast<ArrayTypeNode*>(type.get())) {
+        auto arrayType = std::dynamic_pointer_cast<ArrayTypeNode>(type);
+        auto node = std::make_shared<ArrayDeclNode>(varName, arrayType->arrType, arrayType->size);
+        node->initializer = init;
+        return std::shared_ptr<StatementNode>(node);
+    } else {
         auto node = std::make_shared<VarDeclNode>(varName, type, init);
         return std::shared_ptr<StatementNode>(node);
     }
@@ -166,6 +158,10 @@ antlrcpp::Any AstBuilder::visitConditionForStatement(Luma::LumaParser::Condition
     return result;
 }
 
+antlrcpp::Any AstBuilder::visitArrayLiteral(Luma::LumaParser::ArrayLiteralContext *ctx){
+    return nullptr;
+}
+
 antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext *ctx){
     if(ctx->INTEGER()){
         int val = std::stoi(ctx->INTEGER()->getText());
@@ -179,11 +175,23 @@ antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext 
         return result;
     }else if(ctx->LPAREN()){
         return visit(ctx->expr());
-    }else if(ctx->LBRACKET()){
+    }else if(ctx->LBRACKET() && ctx->IDENTIFIER()){
+        // 配列参照
         std::string arrName = ctx->IDENTIFIER()->getText();
         antlrcpp::Any exprAny = visit(ctx->expr());
         std::shared_ptr<ExprNode> exprNode = std::any_cast<std::shared_ptr<ExprNode>>(exprAny);
         auto node = std::make_shared<ArrayRefNode>(arrName, exprNode);
+        antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
+        return result;
+    }else if(ctx->arrayLiteral()){
+        // 配列リテラル
+        std::vector<std::shared_ptr<ExprNode>> elem;
+        for(auto&& i : ctx->arrayLiteral()->expr()){
+            auto exprAny = visit(i);
+            auto exprNode = std::any_cast<std::shared_ptr<ExprNode>>(exprAny);
+            elem.push_back(exprNode);
+        }
+        auto node = std::make_shared<ArrayLiteralNode>(elem);
         antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
         return result;
     }else if(ctx->IDENTIFIER()){
