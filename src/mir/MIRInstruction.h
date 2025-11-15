@@ -185,17 +185,20 @@ class MIRGepInstruction : public MIRInstruction{
 public:
     std::shared_ptr<MIRValue> basePtr;
     std::shared_ptr<MIRValue> index;
-    std::shared_ptr<MIRType> elementType;
+    std::shared_ptr<MIRType> elementType; // これが要素の型 (int)
+    std::shared_ptr<MIRType> ptrOrArrayType; // basePtrが指す型 ([5 x i64])
     
     explicit MIRGepInstruction(
         std::shared_ptr<MIRValue> base,
         std::shared_ptr<MIRValue> idx,
         std::shared_ptr<MIRType> elemType,
+        std::shared_ptr<MIRType> ptrOrArrayTy, // 新しい引数
         const std::string& resultName
     ) : MIRInstruction(NodeType::GepInstruction, elemType, resultName),
         basePtr(base), 
         index(idx), 
-        elementType(elemType) {}
+        elementType(elemType),
+        ptrOrArrayType(ptrOrArrayTy) {} // 新しいメンバの初期化
     
     void dump(std::ostream& os, int indent = 0) const override {
         printMirIndent(indent);

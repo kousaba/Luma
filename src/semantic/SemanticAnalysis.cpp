@@ -58,7 +58,7 @@ std::shared_ptr<TypeNode> SemanticAnalysis::visit(ExprNode *node){
     if(auto cnode = dynamic_cast<DecimalLiteralNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<CastNode*>(node)) return visit(cnode);
     if(auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
-    // TODO: 続き
+    if(auto cnode = dynamic_cast<ArrayRefNode*>(node)) return visit(cnode);
     else{
         // errorHandler.errorReg("SemanticAnalysis::visit(ExprNode *node) failed to find correct type.", -1);
         errorHandler.compilerErrorReg(CompilerErrorCode::EXPR_VISIT_COULDNOT_CAST, {std::string(typeid(*node).name())});
@@ -217,8 +217,31 @@ std::shared_ptr<TypeNode> SemanticAnalysis::visit(ArrayRefNode *node){
         return nullptr;
     }
     node->symbol = symbol;
-    node->type = symbol->type;
-    return symbol->type;
+
+    // 配列の要素型を取得
+    std::string arrayTypeName = symbol->type->getTypeName(); // 例: "int[5]"
+    size_t bracketPos = arrayTypeName.find('[');
+    if (bracketPos == std::string::npos) {
+        errorHandler.errorReg("Internal error: Array symbol type name does not contain brackets.", 0);
+        return nullptr;
+    }
+    std::string elementTypeName = arrayTypeName.substr(0, bracketPos); // 例: "int"
+
+    std::shared_ptr<TypeNode> elementType = getType(elementTypeName); // 基本型マップから取得
+    if (!elementType) {
+        errorHandler.errorReg("Internal error: Could not determine element type for array '" + node->name + "'.", 0);
+        return nullptr;
+    }
+    node->type = elementType; // ArrayRefNodeの型は要素型
+
+    // インデックス式の型をチェック
+    std::shared_ptr<TypeNode> indexType = visit(node->idx.get());
+    if (!indexType || indexType->getTypeName() != "int") {
+        errorHandler.errorReg("Array index must be an integer for array '" + node->name + "'.", 0);
+        return nullptr;
+    }
+
+    return elementType;
 }
 std::shared_ptr<TypeNode> SemanticAnalysis::visit(CastNode *node){
     std::shared_ptr<TypeNode> exprType = visit(node->expression.get());

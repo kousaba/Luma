@@ -308,6 +308,7 @@ std::shared_ptr<MIRValue> MIRGen::visit(ExprNode* node) {
     if (auto cnode = dynamic_cast<VariableRefNode*>(node)) return visit(cnode);
     if (auto cnode = dynamic_cast<FunctionCallNode*>(node)) return visit(cnode);
     if (auto cnode = dynamic_cast<CastNode*>(node)) return visit(cnode);
+    if (auto cnode = dynamic_cast<ArrayRefNode*>(node)) return visit(cnode); // 追加
     
     errorHandler.errorReg("Unknown ExprNode visited in MIRGen.", 0);
     return nullptr;
@@ -351,10 +352,28 @@ std::shared_ptr<MIRValue> MIRGen::visit(ArrayRefNode *node){
         return nullptr;
     }
     auto elementType = TypeTranslate::toMirType(node->type.get());
+    // arrayAddress の型は int[5]*
+    // ここから int[5] を抽出する
+    std::shared_ptr<MIRType> arrayPtrType = arrayAddress->type; // int[5]*
+    std::string arrayPtrTypeName = arrayPtrType->name; // "int[5]*"
+    size_t starPos = arrayPtrTypeName.rfind('*');
+    std::string arrayTypeName = arrayPtrTypeName.substr(0, starPos); // "int[5]"
+    // arrayTypeName は "int[5]" の形式
+    // ここから要素型 "int" とサイズ "5" をパースする
+    size_t openBracketPos = arrayTypeName.find('[');
+    size_t closeBracketPos = arrayTypeName.find(']');
+    std::string elementTypeName = arrayTypeName.substr(0, openBracketPos); // "int"
+    std::string arraySizeStr = arrayTypeName.substr(openBracketPos + 1, closeBracketPos - (openBracketPos + 1)); // "5"
+    size_t arraySize = std::stoul(arraySizeStr); // 5
+
+    std::shared_ptr<MIRType> arrayElementType = std::make_shared<MIRType>(getMirTypeIDFromString(elementTypeName), elementTypeName); // int
+    std::shared_ptr<MIRType> ptrOrArrayType = std::make_shared<MIRType>(arrayElementType, arraySize); // int[5]
+
     auto gepInst = std::make_shared<MIRGepInstruction>(
         arrayAddress,
         indexValue,
-        elementType,
+        elementType, // int
+        ptrOrArrayType, // int[5]
         newRegisterName()
     );
     currentBlock->addInstruction(gepInst);
@@ -366,6 +385,8 @@ std::shared_ptr<MIRValue> MIRGen::visit(ArrayRefNode *node){
     currentBlock->addInstruction(loadInst);
     return loadInst->result;
 }
+
+
 
 std::shared_ptr<MIRValue> MIRGen::visit(BinaryOpNode* node) {
     std::shared_ptr<MIRValue> lval = visit(node->left.get());
@@ -459,5 +480,14 @@ std::shared_ptr<MIRValue> MIRGen::visit(CastNode* node) { // クラス名変更
     auto castInst = std::make_shared<MIRCastInstruction>(castOp, operand, targetType, newRegisterName());
     currentBlock->addInstruction(castInst);
     return castInst->result;
-    CastOpcode::SIToFP;
+}
+
+MIRType::TypeID MIRGen::getMirTypeIDFromString(const std::string& typeName){
+    if (typeName == "int") return MIRType::TypeID::Int;
+    if (typeName == "float") return MIRType::TypeID::Float;
+    if (typeName == "void") return MIRType::TypeID::Void;
+    if (typeName == "bool") return MIRType::TypeID::Bool;
+    // 他の型も必要に応じて追加
+    errorHandler.errorReg("Unknown MIRTypeID for string: " + typeName, 0);
+    return MIRType::TypeID::Void; // エラー時のデフォルト値
 }

@@ -177,15 +177,8 @@ antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext 
         auto node = std::make_shared<DecimalLiteralNode>(val);
         antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
         return result;
-    }else if(ctx->expr()){
+    }else if(ctx->LPAREN()){
         return visit(ctx->expr());
-    }else if(ctx->IDENTIFIER()){
-        std::string varName = ctx->IDENTIFIER()->getText();
-        auto node = std::make_shared<VariableRefNode>(varName);
-        antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
-        return result;
-    }else if(ctx->functionCallExpr()){
-        return visit(ctx->functionCallExpr());
     }else if(ctx->LBRACKET()){
         std::string arrName = ctx->IDENTIFIER()->getText();
         antlrcpp::Any exprAny = visit(ctx->expr());
@@ -193,6 +186,13 @@ antlrcpp::Any AstBuilder::visitPrimaryExpr(Luma::LumaParser::PrimaryExprContext 
         auto node = std::make_shared<ArrayRefNode>(arrName, exprNode);
         antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
         return result;
+    }else if(ctx->IDENTIFIER()){
+        std::string varName = ctx->IDENTIFIER()->getText();
+        auto node = std::make_shared<VariableRefNode>(varName);
+        antlrcpp::Any result = std::shared_ptr<ExprNode>(node);
+        return result;
+    }else if(ctx->functionCallExpr()){
+        return visit(ctx->functionCallExpr());
     }else{
         errorHandler.errorReg("Unknown primary expr.", 0);
         return nullptr;

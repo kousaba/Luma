@@ -69,4 +69,8 @@ private:
     std::shared_ptr<MIRValue> visit(BinaryOpNode* node);
     std::shared_ptr<MIRValue> visit(FunctionCallNode* node);
     std::shared_ptr<MIRValue> visit(CastNode* node);
+
+    MIRType::TypeID getMirTypeIDFromString(const std::string& typeName);
+
+
 };

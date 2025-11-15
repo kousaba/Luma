@@ -101,6 +101,7 @@ void LLVMGen::visit(MIRInstruction *node){
     if(auto unaryInst = dynamic_cast<MIRUnaryInstruction*>(node)) return visit(unaryInst);
     if(auto castInst = dynamic_cast<MIRCastInstruction*>(node)) {visit(castInst); return;}
     if(auto callInst = dynamic_cast<MIRCallInstruction*>(node)) return visit(callInst);
+    if(auto gepInst = dynamic_cast<MIRGepInstruction*>(node)) { visit(gepInst); return; } // 修正
     errorHandler.errorReg("Unhandled MIRInstruction type: " + std::string(typeid(*node).name()), 0);
 }
 
@@ -224,24 +225,34 @@ void LLVMGen::visit(MIRConditionBranchInstruction *node){
 }
 
 llvm::Value* LLVMGen::visit(MIRGepInstruction *node){
-    llvm::Value* basePtr = valueMap[node->basePtr.get()];
-    llvm::Value* index = valueMap[node->index.get()];
-    if(!basePtr || !index){
-        errorHandler.errorReg("GEP instruction: invalid operands", 0);
+    llvm::Value* basePtr = visit(node->basePtr.get());
+    llvm::Value* index = visit(node->index.get());
+
+    if (!basePtr || !index) {
+        errorHandler.errorReg("GEP base pointer or index is null.", 0);
         return nullptr;
     }
-    llvm::Type* elemType = TypeTranslate::toLlvmType(node->elementType.get(), *context);
-    if(!elemType){
-        errorHandler.errorReg("GEP instruction: invalid element type", 0);
+
+    llvm::Type* ptrOrArrayType = TypeTranslate::toLlvmType(node->ptrOrArrayType.get(), *context);
+
+    if (!ptrOrArrayType) {
+        errorHandler.errorReg("GEP ptrOrArrayType is null or invalid.", 0);
         return nullptr;
     }
-    llvm::Value* gepResult = builder->CreateGEP(
-        elemType,
-        basePtr,
-        {index}
+    
+    std::vector<llvm::Value*> indices;
+    indices.push_back(llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), 0)); // 配列自体へのオフセット
+    indices.push_back(index); // 配列内の要素へのオフセット
+
+    llvm::Value* gep = builder->CreateGEP(
+        ptrOrArrayType, // basePtrが指す型 `[5 x i64]`
+        basePtr,        // `[5 x i64]*`
+        indices,
+        "geptmp"
     );
-    valueMap[node->result.get()] = gepResult;
-    return gepResult;
+
+    valueMap[node->result.get()] = gep;
+    return gep;
 }
 
 llvm::Value* LLVMGen::visit(MIRValue *node){
